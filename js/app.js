@@ -29,28 +29,66 @@ function updateAuthUI(user){
   }
 }
 
-function handleSaveFile(e){
-  const file=e.target.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=async()=>{
-    const buf=new Uint8Array(reader.result);
+async function handleSaveFile(e){
+  const files=Array.from(e.target.files);
+  if(!files.length)return;
+
+  // Find the save file and optional head.yw
+  const file=files.find(f=>/\.yw$|\.yw_g$|\.bin$/i.test(f.name));
+  const headFile=files.find(f=>f.name.toLowerCase()==="head.yw");
+
+  if(!file){
+    alert("Please select a .yw, .yw_g, or .bin save file.");
+    return;
+  }
+
+  const readFile=file=>new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(new Uint8Array(reader.result));
+    reader.onerror=()=>reject(reader.error);
+    reader.readAsArrayBuffer(file);
+  });
+
+  try{
+    const buf=await readFile(file);
     const header=buf.slice(0,64);
     const ver=detectGameVersion(file.name,header);
     const gameId=ver.id;
-    try{
-      let headData=null;
-      const result=await decryptSave(buf,headData,gameId);
-      const yokai=extractYokai(result.data,gameId);
-      _saves[gameId]={game:gameId,version:ver,yokai,file:file.name,raw:buf,result};
-      _currentGame=gameId;_boxIdx=0;_selSlot=null;
-      renderSaveCards();renderGrid();
-      document.getElementById("welcome").style.display="none";
-      document.getElementById("box-view").style.display="flex";
-    }catch(err){
-      alert(`Failed to decrypt: ${err.message}\n\nFor YW2 non-v1.0 / YW3 / B1 / B2, place head.yw in the same folder and use the desktop app.`);
+
+    let headData=null;
+
+    // Load head.yw if it was selected
+    if(headFile){
+      headData=await readFile(headFile);
     }
-  };
-  reader.readAsArrayBuffer(file);
+
+    const result=await decryptSave(buf,headData,gameId);
+    const yokai=extractYokai(result.data,gameId);
+
+    _saves[gameId]={
+      game:gameId,
+      version:ver,
+      yokai,
+      file:file.name,
+      raw:buf,
+      result
+    };
+
+    _currentGame=gameId;
+    _boxIdx=0;
+    _selSlot=null;
+
+    renderSaveCards();
+    renderGrid();
+
+    document.getElementById("welcome").style.display="none";
+    document.getElementById("box-view").style.display="flex";
+
+  }catch(err){
+    alert(`Failed to decrypt: ${err.message}`);
+  }
+
+  e.target.value="";
 }
 
 function renderSaveCards(){
