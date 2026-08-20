@@ -14,7 +14,7 @@
  * This bypasses Firefox's Total Cookie Protection entirely because
  * the auth data is passed via URL parameters, not cookies.
  */
-let _acct=null,_db=null,_sto=null,_user=null,_discordProfile=null;
+let _acct=null,_user=null,_discordProfile=null;
 const _JWT_KEY="ykw_jwt";
 const _SESSION_KEY="ykw_session";  // stores {userId, secret} for session restore
 const _EMAIL_KEY="ykw_email";      // stores email for pre-fill
@@ -40,22 +40,16 @@ function _clearSession(){
 }
 function _storedEmail(){return localStorage.getItem(_EMAIL_KEY)||"";}
 
-function _makeClient(token,useCookie){
-  const{Client,Databases,Storage}=Appwrite;
+function _makeClient(token){
+  const{Client,Account}=Appwrite;
   const c=new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT);
-  // ALWAYS disable cookies when JWT is set — prevents "JWT and cookie used
-  // in the same request" 403 error on EVERY code path (initAppwrite, checkAuth, etc.)
-  if(token||useCookie===false)c.setCookie(false);
   if(token)c.setJWT(token);
-  _db=new Databases(c);_sto=new Storage(c);
-  return c;
+  _acct=new Account(c);
 }
 
 function initAppwrite(){
-  const{Account}=Appwrite;
   const savedJwt=localStorage.getItem(_JWT_KEY);
-  const c=_makeClient(savedJwt);
-  _acct=new Appwrite.Account(c);
+  _makeClient(savedJwt);
 }
 
 // ── Check for OAuth token in URL ────────────────────────────
@@ -111,13 +105,8 @@ async function _promoteToJwt(){
     if(res&&res.jwt){
       localStorage.setItem(_JWT_KEY,res.jwt);
       localStorage.removeItem("cookieFallback");
-      // Create new client with JWT + cookies DISABLED.
-      // setCookie(false) makes the SDK use credentials:'omit' in fetch(),
-      // which tells the browser NOT to send session cookies.
-      // This prevents the "JWT and cookie used in the same request" 403 error.
-      const c=_makeClient(res.jwt,false);
-      _acct=new Appwrite.Account(c);
-      _log("Promoted to JWT ✓ (1h duration) — cookies disabled");
+      _makeClient(res.jwt);
+      _log("Promoted to JWT ✓ (1h duration)");
     }
   }catch(e){
     _log("JWT promotion failed:",e.message);
@@ -151,8 +140,7 @@ async function checkAuth(){
   if(stored&&stored.userId&&stored.secret){
     try{
       _log("Restoring session from stored secret...");
-      const c=_makeClient(null);
-      _acct=new Appwrite.Account(c);
+      _makeClient(null);
       const session=await _acct.createSession({userId:stored.userId,secret:stored.secret});
       _user=await _acct.get();
       _log("Session restored:",_user.name||_user.email);
@@ -169,6 +157,7 @@ async function checkAuth(){
 
 // ── Email/Password Auth ──────────────────────────────────────
 async function signupEmail(name,email,password,remember){
+  if(!_acct)initAppwrite();
   const{ID}=Appwrite;
   _log("Signing up:",email);
   await _acct.create(ID.unique(),email,password,name||email.split("@")[0]);
@@ -181,6 +170,7 @@ async function signupEmail(name,email,password,remember){
 }
 
 async function loginEmail(email,password,remember){
+  if(!_acct)initAppwrite();
   _log("Logging in:",email);
   const session=await _acct.createEmailPasswordSession(email,password);
   _user=await _acct.get();
@@ -192,6 +182,7 @@ async function loginEmail(email,password,remember){
 
 // ── Discord OAuth (via createOAuth2Token — NO COOKIES!) ──────
 function loginDiscord(){
+  if(!_acct)initAppwrite();
   const origin=window.location.origin+window.location.pathname;
   _log("Starting Discord OAuth via createOAuth2Token...");
 
@@ -212,8 +203,7 @@ async function logout(){
   localStorage.removeItem(_PROFILE_KEY);
   localStorage.removeItem("cookieFallback");
   _clearSession();  // Clear remember-me data
-  const c=_makeClient(null);
-  _acct=new Appwrite.Account(c);
+  _makeClient(null);
   _log("Logged out");
 }
 
@@ -279,22 +269,38 @@ function discordAvatarUrl(d,size=64){
   return`https://cdn.discordapp.com/embed/avatars/${Number(d.discriminator||0)%5}.png`;
 }
 
+// ── Raw Appwrite fetch (bypasses SDK cookie issue) ──────────
+// The SDK v23 IIFE always sends credentials:'include' which sends cookies.
+// We use credentials:'omit' + JWT header to avoid the "JWT and cookie" 403.
+function _appwriteFetch(method,path,body){
+  const jwt=localStorage.getItem(_JWT_KEY);
+  const headers={"Content-Type":"application/json","X-Appwrite-Project":APPWRITE_PROJECT};
+  if(jwt)headers["X-Appwrite-JWT"]=jwt;
+  return fetch(APPWRITE_ENDPOINT+path,{
+    method,headers,credentials:"omit",
+    body:body?JSON.stringify(body):undefined
+  }).then(async r=>{
+    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.message||r.statusText);}
+    return r.json();
+  });
+}
+
 // ── Cloud boxes ──────────────────────────────────────────────
 async function loadCloudBoxes(){
   if(!_user)return[];
   try{
-    const r=await _db.listDocuments(DB_ID,COLLECTION_ID,[Appwrite.Query.equal("user_id",_user.$id)]);
+    const q=JSON.stringify({method:"equal",attribute:"user_id",values:[_user.$id]});
+    const r=await _appwriteFetch("GET",`/databases/${DB_ID}/collections/${COLLECTION_ID}/documents?queries[0]=${encodeURIComponent(q)}`);
     return r.documents||[];
   }catch(e){console.error("loadCloudBoxes:",e);return[];}
 }
 
 async function saveYokaiToCloud(box,slot,yokai){
   if(!_user)throw new Error("Not logged in");
-  const ex=await _db.listDocuments(DB_ID,COLLECTION_ID,[
-    Appwrite.Query.equal("user_id",_user.$id),
-    Appwrite.Query.equal("box_num",box),
-    Appwrite.Query.equal("slot",slot)
-  ]);
+  const q1=JSON.stringify({method:"equal",attribute:"user_id",values:[_user.$id]});
+  const q2=JSON.stringify({method:"equal",attribute:"box_num",values:[box]});
+  const q3=JSON.stringify({method:"equal",attribute:"slot",values:[slot]});
+  const r=await _appwriteFetch("GET",`/databases/${DB_ID}/collections/${COLLECTION_ID}/documents?queries[0]=${encodeURIComponent(q1)}&queries[1]=${encodeURIComponent(q2)}&queries[2]=${encodeURIComponent(q3)}`);
   const d={
     user_id:_user.$id,box_num:box,slot,
     yokai_id:yokai.yokai_id,level:yokai.level,
@@ -302,18 +308,17 @@ async function saveYokaiToCloud(box,slot,yokai){
     raw_hex:Array.from(yokai.raw).map(b=>b.toString(16).padStart(2,"0")).join(""),
     game:yokai.game||"yw2",is_team:yokai.is_team||false
   };
-  if(ex.documents.length>0)return await _db.updateDocument(DB_ID,COLLECTION_ID,ex.documents[0].$id,d);
-  return await _db.createDocument(DB_ID,COLLECTION_ID,Appwrite.ID.unique(),d);
+  if(r.documents.length>0)return await _appwriteFetch("PATCH",`/databases/${DB_ID}/collections/${COLLECTION_ID}/documents/${r.documents[0].$id}`,d);
+  return await _appwriteFetch("POST",`/databases/${DB_ID}/collections/${COLLECTION_ID}/documents`,{documentId:Appwrite.ID.unique(),data:d});
 }
 
 async function removeYokaiFromCloud(box,slot){
   if(!_user)return;
-  const ex=await _db.listDocuments(DB_ID,COLLECTION_ID,[
-    Appwrite.Query.equal("user_id",_user.$id),
-    Appwrite.Query.equal("box_num",box),
-    Appwrite.Query.equal("slot",slot)
-  ]);
-  if(ex.documents.length>0)await _db.deleteDocument(DB_ID,COLLECTION_ID,ex.documents[0].$id);
+  const q1=JSON.stringify({method:"equal",attribute:"user_id",values:[_user.$id]});
+  const q2=JSON.stringify({method:"equal",attribute:"box_num",values:[box]});
+  const q3=JSON.stringify({method:"equal",attribute:"slot",values:[slot]});
+  const r=await _appwriteFetch("GET",`/databases/${DB_ID}/collections/${COLLECTION_ID}/documents?queries[0]=${encodeURIComponent(q1)}&queries[1]=${encodeURIComponent(q2)}&queries[2]=${encodeURIComponent(q3)}`);
+  if(r.documents.length>0)await _appwriteFetch("DELETE",`/databases/${DB_ID}/collections/${COLLECTION_ID}/documents/${r.documents[0].$id}`);
 }
 
 async function moveYokaiInCloud(fb,fs,tb,ts){
@@ -328,7 +333,14 @@ async function moveYokaiInCloud(fb,fs,tb,ts){
 async function uploadSaveFile(file){
   if(!_user)throw new Error("Not logged in");
   const id=Appwrite.ID.unique();
-  await _sto.createFile(BUCKET_ID,id,file);
+  const jwt=localStorage.getItem(_JWT_KEY);
+  const fd=new FormData();
+  fd.append("file",file);
+  const headers={"X-Appwrite-Project":APPWRITE_PROJECT};
+  if(jwt)headers["X-Appwrite-JWT"]=jwt;
+  await fetch(`${APPWRITE_ENDPOINT}/storage/buckets/${BUCKET_ID}/files/${id}`,{
+    method:"POST",headers,credentials:"omit",body:fd
+  }).then(async r=>{if(!r.ok)throw new Error((await r.json().catch(()=>({}))).message||r.statusText);});
   const p=_user.prefs||{},s=p.saves||[];
   s.push({id,name:file.name,size:file.size,date:Date.now()});
   await _acct.updatePrefs({saves:s});
@@ -336,10 +348,15 @@ async function uploadSaveFile(file){
 }
 
 function listSaveFiles(){return(_user&&_user.prefs&&_user.prefs.saves)||[];}
-function getSaveFileUrl(id){return _sto.getFileDownload(BUCKET_ID,id);}
+function getSaveFileUrl(id){return `${APPWRITE_ENDPOINT}/storage/buckets/${BUCKET_ID}/files/${id}/download?project=${APPWRITE_PROJECT}`;}
 
 async function deleteSaveFile(id){
-  await _sto.deleteFile(BUCKET_ID,id);
+  const jwt=localStorage.getItem(_JWT_KEY);
+  const headers={"X-Appwrite-Project":APPWRITE_PROJECT};
+  if(jwt)headers["X-Appwrite-JWT"]=jwt;
+  await fetch(`${APPWRITE_ENDPOINT}/storage/buckets/${BUCKET_ID}/files/${id}`,{
+    method:"DELETE",headers,credentials:"omit"
+  }).then(async r=>{if(!r.ok)throw new Error((await r.json().catch(()=>({}))).message||r.statusText);});
   const p=_user.prefs||{},s=(p.saves||[]).filter(x=>x.id!==id);
   await _acct.updatePrefs({saves:s});
 }
