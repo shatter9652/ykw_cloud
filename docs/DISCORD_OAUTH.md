@@ -166,6 +166,10 @@ Each Discord account is a separate user with its own cloud boxes and save files.
 | Login works but cloud calls fail with CORS errors | Step 3 — add `shatter9652.github.io` (and `localhost`) as Web Platforms |
 | `401`/`403` saving yokai | Collection/bucket permissions must include the `Any` role (see main README steps 4–5) |
 | Users logged in as "unknown" | The `identify` scope is missing from the Appwrite Discord adapter |
+| OAuth completes but still 401 (`missing scopes`) | **Cookie not being sent** — the session cookie set by Appwrite during the OAuth callback may be blocked by `SameSite=Lax` or third-party cookie settings. The app has a `_bootstrapSession` fallback that tries: (1) reading cookies from `document.cookie`, (2) raw `fetch` with `credentials: "include"` to capture `X-Fallback-Cookies`. If neither works, open DevTools → Application → Cookies → `tor.cloud.appwrite.io` and check if `a_session_6a86504b0033f733c338` exists. If it does, the cookie IS set but blocked by SameSite — allow third-party cookies for `tor.cloud.appwrite.io`. **Once the first auth succeeds**, the app creates a JWT and stores it in localStorage (`ykw_jwt`). All subsequent requests use the JWT header — no more cookie issues. |
+| Works in one browser but not another | Different browsers have different default third-party cookie policies (Chrome 130+ blocks them by default). Add `tor.cloud.appwrite.io` as a **tracking exception** in browser settings, or test in Firefox (which still allows third-party cookies). |
+| Login works once, then fails on reload | The saved JWT expired (JWTs default to the session lifetime). Click Login with Discord again — after the first successful auth, a new JWT is created and stored. |
+| 3DS-RPC style: same-origin session approach | 3DS-RPC avoids this entire problem by doing the OAuth code exchange server-side and setting plain same-origin cookies. YKW Home is a pure client-side app (GitHub Pages + Appwrite), so it relies on Appwrite's cookie/session management. The JWT promotion (localStorage + Bearer header) is the equivalent fix — no cookies needed after the first login. |
 
 ## Reference
 

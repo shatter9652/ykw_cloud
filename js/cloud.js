@@ -2,38 +2,147 @@
  * cloud.js — Appwrite DB/Storage + Discord OAuth
  * Appwrite = persistent file storage only. Users login via Discord.
  * Uses Appwrite SDK v15 (classic documents API, positional args).
+ *
+ * Session bootstrap strategy:
+ * 1. The v15 SDK sets credentials:"include" on fetch (sends cross-origin cookies).
+ * 2. The SDK also reads/writes a "cookieFallback" localStorage key and sends it
+ *    as the X-Fallback-Cookies header — this is Appwrite's fallback when cookies
+ *    are blocked by SameSite or third-party-cookie policies.
+ * 3. After an OAuth redirect, the session cookie IS set by the server, but the
+ *    X-Fallback-Cookies header is on the redirect response (not exposed to JS on
+ *    the final page).  We bootstrap by making a raw fetch, saving the header,
+ *    and retrying via the SDK.
  */
 let _acct=null,_db=null,_sto=null,_user=null,_discordProfile=null;
-function initAppwrite(){
-  const{Client,Account,Databases,Storage}=Appwrite;
+const _FALLBACK_KEY="cookieFallback";
+const _JWT_KEY="ykw_jwt";
+
+function _makeClient(token){
+  const{Client,Databases,Storage}=Appwrite;
   const c=new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT);
-  _acct=new Account(c);_db=new Databases(c);_sto=new Storage(c);return c;
+  if(token)c.setJWT(token);
+  _db=new Databases(c);_sto=new Storage(c);
+  return c;
 }
-async function checkAuth(){try{_user=await _acct.get();return _user;}catch(_){_user=null;return null;}}
+
+function initAppwrite(){
+  const{Account}=Appwrite;
+  const savedJwt=localStorage.getItem(_JWT_KEY);
+  const c=_makeClient(savedJwt);
+  _acct=new Account(c);
+}
+
+// ── Session bootstrap ─────────────────────────────────────────
+// After an OAuth redirect the session may exist as a cookie but NOT in
+// localStorage.  Try three things, in order:
+//   1. Read non-HttpOnly a_session_* cookies into localStorage
+//   2. Make a raw fetch with credentials:"include"; capture X-Fallback-Cookies
+//   3. Retry the SDK account.get()
+async function _bootstrapSession(){
+  // Already have a fallback — nothing to do
+  if(localStorage.getItem(_FALLBACK_KEY))return;
+
+  // 1. Try document.cookie (works for non-HttpOnly cookies)
+  try{
+    const entries={};
+    document.cookie.split(";").forEach(c=>{
+      const t=c.trim();
+      if(t.startsWith("a_session_")){const[k,...v]=t.split("=");entries[k]=v.join("=");}
+    });
+    if(Object.keys(entries).length>0){
+      localStorage.setItem(_FALLBACK_KEY,JSON.stringify(entries));
+      return;
+    }
+  }catch(_){}
+
+  // 2. Raw fetch — if the cookie IS sent (SameSite=None), the server will
+  //    return X-Fallback-Cookies which we save for the SDK.
+  try{
+    const res=await fetch(`${APPWRITE_ENDPOINT}/account`,{
+      credentials:"include",
+      headers:{"X-Appwrite-Project":APPWRITE_PROJECT,"Content-Type":"application/json"}
+    });
+    const fb=res.headers.get("X-Fallback-Cookies");
+    if(fb){
+      localStorage.setItem(_FALLBACK_KEY,fb);
+      // If the fetch succeeded, we also have the user
+      if(res.ok){try{_user=await res.json();}catch(_){}}
+    }
+  }catch(_){}
+}
+
+async function checkAuth(){
+  // If we already have a user from bootstrap, use it
+  if(_user)return _user;
+
+  // 1. Try saved JWT first (no cookie needed — best for repeat visits)
+  const savedJwt=localStorage.getItem(_JWT_KEY);
+  if(savedJwt){
+    try{_user=await _acct.get();return _user;}
+    catch(_){localStorage.removeItem(_JWT_KEY);_user=null;}
+  }
+
+  // 2. Try session cookie / fallback mechanism
+  await _bootstrapSession();
+  try{
+    _user=await _acct.get();
+    // Auth succeeded! Promote to JWT so future requests bypass cookies
+    _promoteToJwt();
+    return _user;
+  }
+  catch(_){_user=null;return null;}
+}
+
+// After a successful cookie-based session, create a JWT and store it.
+// All future requests use the JWT header — no more cookie issues.
+async function _promoteToJwt(){
+  try{
+    const res=await _acct.createJWT();
+    if(res&&res.jwt){
+      localStorage.setItem(_JWT_KEY,res.jwt);
+      // Rebuild the SDK client to use JWT auth
+      const{Account}=Appwrite;
+      const c=_makeClient(res.jwt);
+      _acct=new Account(c);
+    }
+  }catch(_){}
+}
+
 function loginDiscord(){
   const s=window.location.origin+window.location.pathname;
   _acct.createOAuth2Session("discord",s,s+"?error=auth",["identify","email"]);
 }
-async function logout(){await _acct.deleteSession("current");_user=null;_discordProfile=null;}
 
-// Fetch the Discord profile (username/avatar) using the OAuth access token.
-// The Appwrite account object has no avatar field — Discord's API does.
+async function logout(){
+  try{await _acct.deleteSession("current");}catch(_){}
+  _user=null;_discordProfile=null;
+  localStorage.removeItem(_FALLBACK_KEY);
+  localStorage.removeItem(_JWT_KEY);
+  // Rebuild client without JWT
+  const{Account}=Appwrite;const c=_makeClient(null);
+  _acct=new Account(c);
+}
+
+// ── Discord profile ───────────────────────────────────────────
 async function fetchDiscordProfile(){
   try{
     const s=await _acct.getSession("current");
     if(!s||!s.providerAccessToken)return null;
-    const r=await fetch("https://discord.com/api/users/@me",{headers:{Authorization:"Bearer "+s.providerAccessToken}});
+    const r=await fetch("https://discord.com/api/users/@me",{
+      headers:{Authorization:"Bearer "+s.providerAccessToken}
+    });
     if(!r.ok)return null;
     _discordProfile=await r.json();
     return _discordProfile;
-  }catch(e){return null;}
+  }catch(_){return null;}
 }
 function discordAvatarUrl(d,size=64){
-  if(!d||!d.id)return "";
+  if(!d||!d.id)return"";
   if(d.avatar)return`https://cdn.discordapp.com/avatars/${d.id}/${d.avatar}.png?size=${size}`;
   return`https://cdn.discordapp.com/embed/avatars/${Number(d.discriminator||0)%5}.png`;
 }
 
+// ── Cloud boxes ───────────────────────────────────────────────
 async function loadCloudBoxes(){
   if(!_user)return[];
   try{
