@@ -10,14 +10,17 @@ async function initApp(){
   await loadIconData();
   initContextMenu();
   initAppwrite();
+  // checkAuth() reads ?userId=&secret= from URL (after Discord OAuth redirect)
   const user=await checkAuth();
-  if(user){await fetchDiscordProfile();}
+  if(user){
+    try{await fetchDiscordProfile();}catch(_){}
+  }
   updateAuthUI(user);
   document.getElementById("file-input").addEventListener("change",handleSaveFile);
   setupGridDrop();
-  if(new URLSearchParams(window.location.search).has("error")){
-    alert("Discord login failed. Check the OAuth redirect URI in the Discord Developer Portal — it must match Appwrite's callback URL exactly.");
-    // Clean up the URL
+  const error=new URLSearchParams(window.location.search).get("error");
+  if(error){
+    alert("Discord login failed ("+error+"). Try email/password login instead.");
     window.history.replaceState({},document.title,window.location.pathname);
   }
 }
@@ -56,6 +59,18 @@ function showAuthError(msg){
 }
 async function doLoginDiscord(){
   loginDiscord();
+}
+async function doImportSession(){
+  if(importSessionManually()){
+    // Reload auth state
+    initAppwrite();
+    const user=await checkAuth();
+    if(user){
+      try{await fetchDiscordProfile();}catch(_){}
+      updateAuthUI(user);
+      closeAuthModal();
+    }
+  }
 }
 async function doLoginEmail(){
   const email=document.getElementById("auth-email").value.trim();

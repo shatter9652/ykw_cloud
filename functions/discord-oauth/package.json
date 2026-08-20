@@ -1,0 +1,10 @@
+{
+  "name": "discord-oauth",
+  "version": "1.0.0",
+  "description": "Discord OAuth relay for YKW Home",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {}
+}

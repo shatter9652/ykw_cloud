@@ -40,26 +40,28 @@ A **pure client-side** Yo-kai Watch save viewer with cloud storage, modeled afte
    localhost
    ```
 
-### Step 3: Enable Discord OAuth
+### Step 3: Enable Authentication
 
-> Full walkthrough with code: **[docs/DISCORD_OAUTH.md](docs/DISCORD_OAUTH.md)**
-> (Discord Developer Portal app, Appwrite adapter, redirect URI, scopes,
-> session/profile access, token refresh).
+You have **two auth options** (can enable both):
 
-1. In Appwrite Console → **Auth** → **OAuth2**
-2. Find **Discord** and click **Enable**
-3. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-4. Create a new application (or use existing)
-5. Go to **OAuth2** → **Redirects** and add **exactly** the callback URI Appwrite shows
-   in its Discord adapter settings (it includes your project ID):
-   ```
-   https://tor.cloud.appwrite.io/v1/account/sessions/oauth2/callback/discord/6a86504b0033f733c338
-   ```
-   > ⚠️ Use the URI exactly as Appwrite displays it. A missing project-ID suffix
-   > (or a `cloud.appwrite.io` host) makes Discord reject the redirect and the
-   > login silently fails.
-6. Copy the **Client ID** and **Client Secret** from Discord into Appwrite
-7. In Appwrite OAuth2 settings for Discord, set **Scopes** to: `identify email`
+#### Option A: Email/Password (works everywhere, recommended)
+
+1. Appwrite Console → **Auth** → **Settings**
+2. Enable **Email/Password** (toggle ON)
+3. Click **Update**
+
+Users can sign up and login with email + password. No cookies needed — creates a JWT immediately.
+
+#### Option B: Discord OAuth (via Appwrite Function relay)
+
+> Full setup guide: **[functions/discord-oauth/README.md](functions/discord-oauth/README.md)**
+
+This uses an Appwrite Function as a server-side OAuth relay (like 3DS-RPC's Flask server). The function exchanges the Discord code server-side and returns a JWT in the redirect URL.
+
+1. Enable **Email/Password** first (the function creates Appwrite users)
+2. Create the Appwrite Function (see `functions/discord-oauth/README.md`)
+3. Set environment variables in the function
+4. Update Discord redirect URI to the function's execution URL
 
 ### Step 4: Create Database + Collection
 
@@ -254,11 +256,9 @@ You forgot Step 2 — the Web Platform. Add `shatter9652.github.io` (and `localh
 **`401 User (role: guests) missing scopes`**
 
 This means no session exists — the user is not logged in. Causes:
-1. **Discord OAuth didn't complete** — check the redirect URI matches exactly (project-ID suffix). Open DevTools → Application → Cookies after the redirect to see if `a_session_*` was set.
-2. **Third-party cookie blocked** — Chrome blocks cross-origin cookies by default. Try Firefox, or add `tor.cloud.appwrite.io` as a cookie exception in Chrome settings.
+1. **Discord Function not returning JWT** — Check the function's execution logs in Appwrite Console. Make sure the Discord redirect URI matches the function's execution URL.
+2. **Email/Password not working** — Make sure Email/Password auth is enabled in Appwrite Console → Auth → Settings.
 3. **Appwrite Web Platform missing** — add `localhost` (local) or `shatter9652.github.io` (production) in Appwrite Console → Settings → Platforms.
-
-**Workaround**: Use **Email/Password** auth instead of Discord — it creates a JWT immediately (no cookie needed), so it works in all browsers without third-party cookie issues.
 
 **`401` / `403` when saving yokai to the cloud**
 
