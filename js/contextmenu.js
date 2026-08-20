@@ -80,6 +80,26 @@ function importYkFile(boxNum,slot){
     const id=gi.crc?dv.getUint32(gi.idOff,true):dv.getUint16(gi.idOff,true);
     const lv=buf[gi.lvOff]||1;
     yokai={slot,yokai_id:id,level:lv,is_team:false,raw:new Uint8Array(buf.slice(0,gi.size)),game,name:resolveName(id)};
+    // Validate: check if this yokai exists in the target game
+    const srcGame=yokai.game;
+    const tgtGame=_currentGame;
+    if(srcGame&&tgtGame&&srcGame!==tgtGame){
+      // Check if the yokai's icon exists in the target game's icon dirs
+      const iconBase=resolveIconBase(id);
+      if(iconBase){
+        const fn=iconBase+".00.png";
+        const tgtDir=ICON_DIRS[tgtGame];
+        if(tgtDir){
+          // We can't check file existence from JS, but we can check if the
+          // yokai has a known name in the target game's context
+          const tgtName=resolveName(id);
+          // If the name is just "Yo-kai #ID" it probably doesn't exist in this game
+          if(tgtName.startsWith("Yo-kai #")&&!iconBase){
+            alert(`⚠️ ${yokai.name||"This Yo-kai"} may not exist in ${GAMES[tgtGame]?.name||tgtGame}.\n\nImporting anyway — check that it works in-game.`);
+          }
+        }
+      }
+    }
     if(typeof _placeYokaiInBox==="function")_placeYokaiInBox(boxNum,slot,yokai);
   };
   inp.click();

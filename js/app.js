@@ -224,12 +224,12 @@ function _validateFile(f){
   const MAX_SIZE=5*1024*1024; // 5MB
   const name=(f.name||"").toLowerCase();
   const ext=name.split(".").pop();
-  const validSaveExt=["yw","yw_g","bin"];
+  const validSaveExt=["yw","yw_g","bin","yw4"];
   const validHeadPrefix=name.startsWith("head");
   const isSave=validSaveExt.includes(ext);
   const isHead=validHeadPrefix;
   if(!isSave&&!isHead){
-    alert(`"${f.name}" is not a supported file type.\n\nAccepted: .yw, .yw_g, .bin\n(head.yw / head.yw_g for iOS)`);
+    alert(`"${f.name}" is not a supported file type.\n\nAccepted: .yw, .yw_g, .bin, .yw4\n(head.yw / head.yw_g for iOS, data.bin for YW4)`);
     return false;
   }
   if(f.size>MAX_SIZE){

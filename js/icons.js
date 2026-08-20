@@ -9,7 +9,23 @@ async function loadIconData(){
   try{const r=await fetch("resources/data/yokai_names.json");if(r.ok){const d=await r.json();for(const[k,v]of Object.entries(d))_nameDB[parseInt(k)]=v;}}catch(_){}
 }
 function resolveName(id){const n=_crcName[id]||_nameDB[id];if(!n)return`Yo-kai #${id}`;const m=n.match(/\(([^)]+)\)\s*$/);return m?m[1].trim():n;}
-function resolveIconBase(id){const k="0x"+id.toString(16).toUpperCase().padStart(8,"0");return _crcIcon[k]||null;}
+function resolveIconBase(id){
+  const k="0x"+id.toString(16).toUpperCase().padStart(8,"0");
+  if(_crcIcon[k])return _crcIcon[k];
+  // Fallback: try sequential ID patterns (YW2/YKB: y{id+100}000, YW3: c{id}000)
+  // Only try this for small IDs that look like sequential yokai IDs
+  if(id>0&&id<10000){
+    const yName=`y${id+100}000`;const cName=`c${id}000`;
+    // Check if the icon file exists by testing against known icon dirs
+    for(const g of["yw3","yw2"]){const d=ICON_DIRS[g];if(d){
+      // We can't check filesystem from JS, but return the name as a guess
+      // The caller will try multiple dirs and fallback
+      if(g==="yw3")return cName;
+      return yName;
+    }}
+  }
+  return null;
+}
 function getYokaiIconUrl(id,prefGame){
   const base=resolveIconBase(id);if(!base)return null;
   const fn=base+".00.png";const order=[prefGame,...ICON_FALLBACK.filter(g=>g!==prefGame)];
