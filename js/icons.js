@@ -1,0 +1,40 @@
+/**
+ * icons.js — Game icon + yokai icon resolution + version detection
+ */
+let _crcIcon={},_nameDB={},_crcName={},_loaded=false;
+async function loadIconData(){
+  if(_loaded)return;_loaded=true;
+  try{const r=await fetch("resources/data/crc32_to_icon.json");if(r.ok)_crcIcon=await r.json();}catch(_){}
+  try{const r=await fetch("resources/data/crc32_yokai_map.json");if(r.ok){const d=await r.json();for(const[k,v]of Object.entries(d))_crcName[parseInt(k,16)]=v;}}catch(_){}
+  try{const r=await fetch("resources/data/yokai_names.json");if(r.ok){const d=await r.json();for(const[k,v]of Object.entries(d))_nameDB[parseInt(k)]=v;}}catch(_){}
+}
+function resolveName(id){const n=_crcName[id]||_nameDB[id];if(!n)return`Yo-kai #${id}`;const m=n.match(/\(([^)]+)\)\s*$/);return m?m[1].trim():n;}
+function resolveIconBase(id){const k="0x"+id.toString(16).toUpperCase().padStart(8,"0");return _crcIcon[k]||null;}
+function getYokaiIconUrl(id,prefGame){
+  const base=resolveIconBase(id);if(!base)return null;
+  const fn=base+".00.png";const order=[prefGame,...ICON_FALLBACK.filter(g=>g!==prefGame)];
+  for(const g of order){const d=ICON_DIRS[g];if(d)return`YoKaiIcons/${d}/${fn}`;}return null;
+}
+function getGameIconUrl(game){return GAME_VERSIONS.find(v=>v.id===game)?.icon||"icons/ykw2psycicspecters.png";}
+
+function detectGameVersion(filename,header){
+  const name=(filename||"").toLowerCase();
+  const hint=name;
+  for(const v of GAME_VERSIONS)if(v.test&&v.test(hint))return v;
+  if(header&&header.length>=12){
+    let hasCCM=false;for(let i=0;i<12;i++)if(header[i]!==0){hasCCM=true;break;}
+    if(hasCCM){
+      if(name.includes("yw3")||name.includes("sushi")||name.includes("tempura")||name.includes("sukiyaki"))
+        return GAME_VERSIONS.find(v=>v.id==="yw3"&&v.label.includes("International"));
+      if(name.includes("ykb")||name.includes("blaster"))
+        return GAME_VERSIONS.find(v=>v.id==="ykb"&&v.label.includes("Red Cat"));
+      if(name.includes("b2"))return GAME_VERSIONS.find(v=>v.id==="b2"&&v.label.includes("Sword"));
+      return GAME_VERSIONS.find(v=>v.id==="yw2"&&v.label.includes("Psychic"));
+    }
+  }
+  if(name.includes("yw3"))return GAME_VERSIONS.find(v=>v.id==="yw3"&&v.label.includes("International"));
+  if(name.includes("ykb")||name.includes("blaster"))return GAME_VERSIONS.find(v=>v.id==="ykb"&&v.label.includes("Red Cat"));
+  if(name.includes("b2"))return GAME_VERSIONS.find(v=>v.id==="b2"&&v.label.includes("Sword"));
+  return GAME_VERSIONS.find(v=>v.id==="yw2"&&v.label.includes("Psychic"));
+}
+function nameColor(n){let h=0;for(let i=0;i<(n||"").length;i++)h=((h*31)+n.charCodeAt(i))&0xFFFF;return`hsl(${h%360},47%,55%)`;}
