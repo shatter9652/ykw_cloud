@@ -1,6 +1,7 @@
 /**
  * cloud.js — Appwrite DB/Storage + Discord OAuth
  * Appwrite = persistent file storage only. Users login via Discord.
+ * Uses Appwrite SDK v15 (classic documents API, positional args).
  */
 let _acct=null,_db=null,_sto=null,_user=null;
 function initAppwrite(){
@@ -17,19 +18,30 @@ async function logout(){await _acct.deleteSession("current");_user=null;}
 
 async function loadCloudBoxes(){
   if(!_user)return[];
-  try{const r=await _db.listRows({databaseId:DB_ID,tableId:COLLECTION_ID,queries:[Appwrite.Query.equal("user_id",_user.$id)]});return r.rows;}catch(e){console.error(e);return[];}
+  try{
+    const r=await _db.listDocuments(DB_ID,COLLECTION_ID,[Appwrite.Query.equal("user_id",_user.$id)]);
+    return r.documents||[];
+  }catch(e){console.error("loadCloudBoxes:",e);return[];}
 }
 async function saveYokaiToCloud(box,slot,yokai){
   if(!_user)throw new Error("Not logged in");
-  const ex=await _db.listRows({databaseId:DB_ID,tableId:COLLECTION_ID,queries:[Appwrite.Query.equal("user_id",_user.$id),Appwrite.Query.equal("box_num",box),Appwrite.Query.equal("slot",slot)]});
+  const ex=await _db.listDocuments(DB_ID,COLLECTION_ID,[
+    Appwrite.Query.equal("user_id",_user.$id),
+    Appwrite.Query.equal("box_num",box),
+    Appwrite.Query.equal("slot",slot)
+  ]);
   const d={user_id:_user.$id,box_num:box,slot,yokai_id:yokai.yokai_id,level:yokai.level,name:yokai.name||resolveName(yokai.yokai_id),raw_hex:Array.from(yokai.raw).map(b=>b.toString(16).padStart(2,"0")).join(""),game:yokai.game||"yw2",is_team:yokai.is_team||false};
-  if(ex.rows.length>0)return await _db.updateRow({databaseId:DB_ID,tableId:COLLECTION_ID,rowId:ex.rows[0].$id,data:d});
-  return await _db.createRow({databaseId:DB_ID,tableId:COLLECTION_ID,rowId:Appwrite.ID.unique(),data:d});
+  if(ex.documents.length>0)return await _db.updateDocument(DB_ID,COLLECTION_ID,ex.documents[0].$id,d);
+  return await _db.createDocument(DB_ID,COLLECTION_ID,Appwrite.ID.unique(),d);
 }
 async function removeYokaiFromCloud(box,slot){
   if(!_user)return;
-  const ex=await _db.listRows({databaseId:DB_ID,tableId:COLLECTION_ID,queries:[Appwrite.Query.equal("user_id",_user.$id),Appwrite.Query.equal("box_num",box),Appwrite.Query.equal("slot",slot)]});
-  if(ex.rows.length>0)await _db.deleteRow({databaseId:DB_ID,tableId:COLLECTION_ID,rowId:ex.rows[0].$id});
+  const ex=await _db.listDocuments(DB_ID,COLLECTION_ID,[
+    Appwrite.Query.equal("user_id",_user.$id),
+    Appwrite.Query.equal("box_num",box),
+    Appwrite.Query.equal("slot",slot)
+  ]);
+  if(ex.documents.length>0)await _db.deleteDocument(DB_ID,COLLECTION_ID,ex.documents[0].$id);
 }
 async function moveYokaiInCloud(fb,fs,tb,ts){
   const boxes=await loadCloudBoxes();const src=boxes.find(r=>r.box_num===fb&&r.slot===fs);if(!src)return;
@@ -40,15 +52,15 @@ async function moveYokaiInCloud(fb,fs,tb,ts){
 async function uploadSaveFile(file){
   if(!_user)throw new Error("Not logged in");
   const id=Appwrite.ID.unique();
-  await _sto.createFile({bucketId:BUCKET_ID,fileId:id,file});
+  await _sto.createFile(BUCKET_ID,id,file);
   const p=_user.prefs||{};const s=p.saves||[];
   s.push({id,name:file.name,size:file.size,date:Date.now()});
   await _acct.updatePrefs({saves:s});return id;
 }
 function listSaveFiles(){return(_user&&_user.prefs&&_user.prefs.saves)||[];}
-function getSaveFileUrl(id){return _sto.getFileDownload({bucketId:BUCKET_ID,fileId:id});}
+function getSaveFileUrl(id){return _sto.getFileDownload(BUCKET_ID,id);}
 async function deleteSaveFile(id){
-  await _sto.deleteFile({bucketId:BUCKET_ID,fileId:id});
+  await _sto.deleteFile(BUCKET_ID,id);
   const p=_user.prefs||{};const s=(p.saves||[]).filter(x=>x.id!==id);
   await _acct.updatePrefs({saves:s});
 }

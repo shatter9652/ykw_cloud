@@ -25,7 +25,21 @@ A **pure client-side** Yo-kai Watch save viewer with cloud storage, modeled afte
 2. Create a new project (name it "YKW Home" or similar)
 3. Note your **Project ID** from the Overview page
 
-### Step 2: Enable Discord OAuth
+### Step 2: Add a Web Platform (required for CORS)
+
+**This step is required** — without it the browser blocks all API calls from your GitHub Pages domain.
+
+1. Appwrite Console → **Settings** → **Platforms** → **Add Platform** → **Web**
+2. Enter your GitHub Pages hostname (origin only, **no path**):
+   ```
+   shatter9652.github.io
+   ```
+3. Save. Repeat for `localhost` while developing:
+   ```
+   localhost
+   ```
+
+### Step 3: Enable Discord OAuth
 
 1. In Appwrite Console → **Auth** → **OAuth2**
 2. Find **Discord** and click **Enable**
@@ -33,12 +47,12 @@ A **pure client-side** Yo-kai Watch save viewer with cloud storage, modeled afte
 4. Create a new application (or use existing)
 5. Go to **OAuth2** → **Redirects** and add:
    ```
-   https://cloud.appwrite.io/v1/account/sessions/oauth2/callback/discord
+   https://tor.cloud.appwrite.io/v1/account/sessions/oauth2/callback/discord
    ```
 6. Copy the **Client ID** and **Client Secret** from Discord into Appwrite
 7. In Appwrite OAuth2 settings for Discord, set **Scopes** to: `identify email`
 
-### Step 3: Create Database + Collection
+### Step 4: Create Database + Collection
 
 1. Appwrite Console → **Databases** → **Create Database** (name: "ykw-home")
 2. Note the **Database ID**
@@ -58,13 +72,13 @@ A **pure client-side** Yo-kai Watch save viewer with cloud storage, modeled afte
    | is_team     | Boolean | —     |
 6. Set **Permissions** → Add role `Any` with `Create`, `Read`, `Update`, `Delete`
 
-### Step 4: Create Storage Bucket
+### Step 5: Create Storage Bucket
 
 1. Appwrite Console → **Storage** → **Create Bucket** (name: "save_files")
 2. Note the **Bucket ID**
 3. Settings → **Permissions** → Add role `Any` with `Create`, `Read`, `Delete`
 
-### Step 5: Configure the Web App
+### Step 6: Configure the Web App
 
 Edit `js/config.js` and replace the placeholder values:
 
@@ -75,22 +89,22 @@ const COLLECTION_ID     = "your-collection-id-here";
 const BUCKET_ID         = "your-bucket-id-here";
 ```
 
-### Step 6: Deploy to GitHub Pages
+### Step 7: Deploy to GitHub Pages
 
-1. Push the `ykw-home/ykw-web/` folder to your GitHub repo
+1. Push the contents of `ykw-home/ykw-web/` to your GitHub repo
 2. In GitHub → **Settings** → **Pages** → Source: "Deploy from a branch"
-3. Set folder to `/ykw-web` on `main` branch
-4. Your site will be at `https://username.github.io/repo/ykw-web/`
+3. Either deploy from the repo root, or from a subfolder (e.g. `/ykw-web`) — **all asset paths are relative**, so sub-path deployments just work (this repo deploys to `https://shatter9652.github.io/ykw_cloud/`)
+4. Your site will be at `https://<username>.github.io/<repo>/` (or the subfolder)
 
-### Step 7: Update Discord Redirect URI
+### Step 8: Update Discord Redirect URI
 
-After deploying, update the Discord OAuth redirect URI in the Discord Developer Portal to include your GitHub Pages URL:
+After deploying, confirm the Discord OAuth redirect URI in the Discord Developer Portal points at **your** Appwrite endpoint:
 ```
-https://cloud.appwrite.io/v1/account/sessions/oauth2/callback/discord
+https://tor.cloud.appwrite.io/v1/account/sessions/oauth2/callback/discord
 ```
 (This stays the same — Appwrite handles the redirect back to your site)
 
-### Step 8: Test
+### Step 9: Test
 
 1. Open your GitHub Pages URL
 2. Click "Login with Discord"
@@ -162,6 +176,27 @@ Individual yokai files are raw binary copies of the yokai's entry from section 0
 | .yk3    | Yo-kai Watch 3 | 84 B   |
 | .ykb    | Blasters 1     | 76 B   |
 | .ykb2   | Blasters 2     | 76 B   |
+
+## Troubleshooting
+
+**`Appwrite is not defined` / script blocked due to MIME type mismatch**
+
+The CDN URL must be the **IIFE build** (`dist/iife/sdk.min.js`), not `dist/sdk.min.js`. A wrong path returns a 404 page as `text/plain`, which the browser blocks with `nosniff`:
+```html
+<script src="https://cdn.jsdelivr.net/npm/appwrite@15.0.0/dist/iife/sdk.min.js"></script>
+```
+
+**Cloud calls fail with CORS errors in the console**
+
+You forgot Step 2 — the Web Platform. Add `shatter9652.github.io` (and `localhost` for local testing) under **Settings → Platforms → Add Platform → Web**.
+
+**`401` / `403` when saving yokai to the cloud**
+
+Check collection and bucket **Permissions** — they must include the `Any` role with Create/Read/Update/Delete (see Steps 4–5). Also make sure the user is logged in via Discord.
+
+**Using the wrong SDK version breaks everything**
+
+This project pins `appwrite@15.0.0` on purpose — the v15 SDK uses the classic `collections/documents` API, which is what this Appwrite backend serves. Newer SDK versions (v26+) dropped those methods in favor of the tables/rows API, which this backend does not support.
 
 ## Comparison to Unbound Cloud
 
