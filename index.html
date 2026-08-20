@@ -69,16 +69,10 @@
       <div class="cloud-saves"><h3>Uploaded Save Files</h3><div id="cloud-saves"></div></div>
     </div>
     <!-- Settings page -->
-    <div class="page" id="settings-page" style="padding:24px;">
-      <h2 style="margin-bottom:12px;">Settings</h2>
-      <div class="panel-card">
-        <h3>About</h3>
-        <p style="font-size:12px;color:var(--text2);line-height:1.5;">
-          YKW Home — Yo-kai Watch save viewer with cloud storage.<br>
-          Icons from all games (YW1-YW3, Blasters 1-2).<br>
-          Right-click yokai to export .yk files. Right-click blank to import.<br>
-          Double-tap on mobile for context menus.
-        </p>
+    <div class="page" id="settings-page" style="padding:24px;overflow-y:auto;">
+      <h2 style="margin-bottom:16px;">Settings</h2>
+      <div id="settings-content">
+        <p class="muted">Login to access account settings.</p>
       </div>
     </div>
   </div>
@@ -159,12 +153,12 @@
 <!-- Appwrite SDK from CDN (must load before cloud.js) -->
 <script src="https://cdn.jsdelivr.net/npm/appwrite@23.0.0/dist/iife/sdk.min.js"></script>
 <!-- JS files loaded individually -->
-<script src="js/config.js?v=2"></script>
-<script src="js/crypto.js?v=2"></script>
-<script src="js/icons.js?v=2"></script>
-<script src="js/cloud.js?v=2"></script>
-<script src="js/contextmenu.js?v=2"></script>
-<script src="js/app.js?v=2"></script>
+<script src="js/config.js?v=3"></script>
+<script src="js/crypto.js?v=3"></script>
+<script src="js/icons.js?v=3"></script>
+<script src="js/cloud.js?v=3"></script>
+<script src="js/contextmenu.js?v=3"></script>
+<script src="js/app.js?v=3"></script>
 <script>initApp();</script>
 </body>
 </html>

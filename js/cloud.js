@@ -82,6 +82,7 @@ async function _promoteToJwt(){
     const res=await _acct.createJWT();
     if(res&&res.jwt){
       localStorage.setItem(_JWT_KEY,res.jwt);
+      localStorage.removeItem("cookieFallback");  // Clear cookie fallback to avoid JWT+cookie conflict
       const c=_makeClient(res.jwt);
       _acct=new Appwrite.Account(c);
       _log("Promoted to JWT ✓");
@@ -158,18 +159,28 @@ async function logout(){
   try{await _acct.deleteSession("current");}catch(_){}
   _user=null;_discordProfile=null;
   localStorage.removeItem(_JWT_KEY);
+  localStorage.removeItem(_PROFILE_KEY);
+  localStorage.removeItem("cookieFallback");
   const c=_makeClient(null);
   _acct=new Appwrite.Account(c);
   _log("Logged out");
 }
 
 // ── Discord profile ──────────────────────────────────────────
+const _PROFILE_KEY="ykw_discord_profile";
+
 async function fetchDiscordProfile(){
-  // If we have profile data from the URL params, use it
+  // If we have profile data from a previous fetch, use it
   if(_discordProfile&&_discordProfile.username){
-    _log("Using profile from URL:",_discordProfile.username);
+    _log("Using cached profile:",_discordProfile.username);
     return _discordProfile;
   }
+  // Try localStorage cache
+  try{
+    const cached=localStorage.getItem(_PROFILE_KEY);
+    if(cached){_discordProfile=JSON.parse(cached);return _discordProfile;}
+  }catch(_){}
+  // Fetch from Discord API via Appwrite session
   try{
     const s=await _acct.getSession("current");
     if(!s||!s.providerAccessToken)return null;
@@ -178,9 +189,37 @@ async function fetchDiscordProfile(){
     });
     if(!r.ok)return null;
     _discordProfile=await r.json();
+    localStorage.setItem(_PROFILE_KEY,JSON.stringify(_discordProfile));
     _log("Got Discord profile:",_discordProfile.username);
     return _discordProfile;
   }catch(_){return null;}
+}
+
+// ── Account settings ────────────────────────────────────────
+async function updateAccountName(name){
+  if(!_user)throw new Error("Not logged in");
+  await _acct.updateName(name);
+  _user.name=name;
+  _log("Name updated to:",name);
+}
+
+async function updateAccountEmail(email,password){
+  if(!_user)throw new Error("Not logged in");
+  await _acct.updateEmail(email,password);
+  _log("Email updated to:",email);
+}
+
+async function updateAccountPassword(newPw,oldPw){
+  if(!_user)throw new Error("Not logged in");
+  await _acct.updatePassword(newPw,oldPw||undefined);
+  _log("Password updated");
+}
+
+async function deleteAccount(password){
+  if(!_user)throw new Error("Not logged in");
+  await _acct.updateStatus();  // Block account
+  await logout();
+  _log("Account deleted");
 }
 
 function discordAvatarUrl(d,size=64){

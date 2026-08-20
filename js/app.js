@@ -389,7 +389,7 @@ function showView(v){
   document.getElementById(v+"-page").style.display="flex";
   document.querySelectorAll(".nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
 }
-function navigate(v){showView(v);if(v==="cloud")loadCloudView();}
+function navigate(v){showView(v);if(v==="cloud")loadCloudView();if(v==="settings")renderSettings();}
 
 // ── Place yokai from import ───────────────────────────────────
 function _placeYokaiInBox(boxNum,slot,yokai){
@@ -437,3 +437,83 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape")closeDetail();
   if(e.ctrlKey&&e.key==="o"){e.preventDefault();document.getElementById("file-input").click();}
 });
+
+// ── Settings page ────────────────────────────────────────────
+function renderSettings(){
+  const el=document.getElementById("settings-content");
+  if(!_user){el.innerHTML='<p class="muted">Login to access account settings.</p>';return;}
+  const d=_discordProfile||{};
+  const name=d.username||_user.name||_user.email||"User";
+  const avatar=discordAvatarUrl(d);
+  const isDiscord=_user.labels&&_user.labels.includes("discordsignin");
+  el.innerHTML=`
+    <div class="panel-card" style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+        ${avatar?`<img src="${avatar}" style="width:48px;height:48px;border-radius:50%;border:2px solid var(--accent);">`:''}
+        <div>
+          <div style="font-weight:bold;font-size:14px;">${name.replace(/</g,"&lt;")}</div>
+          <div style="font-size:11px;color:var(--text2);">${_user.email||"No email"}</div>
+          <div style="font-size:10px;color:var(--text2);">ID: ${_user.$id}</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-card" style="margin-bottom:12px;">
+      <h3>Change Display Name</h3>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <input type="text" id="settings-name" value="${(_user.name||"").replace(/"/g,"&quot;")}" placeholder="Display name" style="flex:1;">
+        <button class="btn primary" onclick="doUpdateName()">Save</button>
+      </div>
+    </div>
+    <div class="panel-card" style="margin-bottom:12px;">
+      <h3>Change Email</h3>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
+        <input type="email" id="settings-email" value="${_user.email||""}" placeholder="New email">
+        <input type="password" id="settings-email-pw" placeholder="Current password (required)">
+        <button class="btn primary" onclick="doUpdateEmail()">Update Email</button>
+      </div>
+    </div>
+    <div class="panel-card" style="margin-bottom:12px;">
+      <h3>Change Password</h3>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
+        <input type="password" id="settings-new-pw" placeholder="New password (min 8 chars)">
+        <input type="password" id="settings-old-pw" placeholder="Current password (optional for OAuth users)">
+        <button class="btn primary" onclick="doUpdatePassword()">Update Password</button>
+      </div>
+    </div>
+    <div class="panel-card" style="border-color:var(--red);">
+      <h3 style="color:var(--red);">Danger Zone</h3>
+      <button class="btn danger" onclick="doDeleteAccount()" style="margin-top:8px;">Delete Account</button>
+    </div>
+    <p id="settings-msg" style="font-size:11px;margin-top:8px;"></p>
+  `;
+}
+function settingsMsg(msg,isError){
+  const el=document.getElementById("settings-msg");
+  if(el){el.textContent=msg;el.style.color=isError?"var(--red)":"var(--green)";}
+}
+async function doUpdateName(){
+  const name=document.getElementById("settings-name").value.trim();
+  if(!name){settingsMsg("Enter a name.",true);return;}
+  try{await updateAccountName(name);settingsMsg("Name updated!");renderSettings();}
+  catch(e){settingsMsg(e.message,true);}
+}
+async function doUpdateEmail(){
+  const email=document.getElementById("settings-email").value.trim();
+  const pw=document.getElementById("settings-email-pw").value;
+  if(!email||!pw){settingsMsg("Enter new email and current password.",true);return;}
+  try{await updateAccountEmail(email,pw);settingsMsg("Email updated! Check your inbox for verification.");renderSettings();}
+  catch(e){settingsMsg(e.message,true);}
+}
+async function doUpdatePassword(){
+  const newPw=document.getElementById("settings-new-pw").value;
+  const oldPw=document.getElementById("settings-old-pw").value;
+  if(!newPw||newPw.length<8){settingsMsg("Password must be at least 8 chars.",true);return;}
+  try{await updateAccountPassword(newPw,oldPw);settingsMsg("Password updated!");}
+  catch(e){settingsMsg(e.message,true);}
+}
+async function doDeleteAccount(){
+  if(!confirm("Are you sure you want to delete your account? This cannot be undone."))return;
+  const pw=prompt("Enter your password to confirm deletion (leave blank for OAuth users):");
+  try{await deleteAccount(pw);alert("Account deleted.");window.location.reload();}
+  catch(e){settingsMsg(e.message,true);}
+}
