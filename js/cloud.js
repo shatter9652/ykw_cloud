@@ -41,6 +41,10 @@ function _clearSession(){
 function _storedEmail(){return localStorage.getItem(_EMAIL_KEY)||"";}
 
 function _makeClient(token){
+  // When using JWT, clear cookieFallback FIRST — the SDK v23 Client constructor
+  // reads cookieFallback from localStorage and sends it as X-Fallback-Cookies,
+  // which conflicts with the JWT header ("JWT and cookie used" 403).
+  if(token)localStorage.removeItem("cookieFallback");
   const{Client,Account}=Appwrite;
   const c=new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT);
   if(token)c.setJWT(token);
@@ -115,6 +119,9 @@ async function _promoteToJwt(){
 
 // ── Check auth on page load ──────────────────────────────────
 async function checkAuth(){
+  // 0. If user is already set and JWT exists, trust it (avoids re-running full flow)
+  if(_user&&localStorage.getItem(_JWT_KEY))return _user;
+
   // 1. Check if we just came back from OAuth with userId+secret in URL
   const tokenData=_checkOAuthToken();
   if(tokenData){
