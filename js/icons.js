@@ -20,7 +20,7 @@ function getGameIconUrl(game){return GAME_VERSIONS.find(v=>v.id===game)?.icon||"
 function detectGameVersion(filename,header){
   const name=(filename||"").toLowerCase();
   const hint=name;
-  for(const v of GAME_VERSIONS)if(v.test&&v.test(hint))return v;
+  for(const v of GAME_VERSIONS)if(v.match&&v.match.test(hint))return v;
   if(header&&header.length>=12){
     let hasCCM=false;for(let i=0;i<12;i++)if(header[i]!==0){hasCCM=true;break;}
     if(hasCCM){

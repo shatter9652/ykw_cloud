@@ -7,7 +7,7 @@ A **pure client-side** Yo-kai Watch save viewer with cloud storage, modeled afte
 ## Features
 
 - **Client-side decryption** — IeCCode + AES-CCM in JavaScript (no server needed for saves)
-- **Discord OAuth login** — users authenticate via Discord
+- **Discord OAuth login** — users authenticate via Discord (see [docs/DISCORD_OAUTH.md](docs/DISCORD_OAUTH.md))
 - **Cloud boxes** — 100 boxes × 30 yokai = 3,000 capacity per user (Appwrite database)
 - **Save file storage** — upload/download .yw files to Appwrite cloud storage
 - **Export yokai** — right-click (desktop) or double-tap (mobile) to export as .yk1/.yk2/.yk3/.ykb/.ykb2
@@ -40,6 +40,10 @@ A **pure client-side** Yo-kai Watch save viewer with cloud storage, modeled afte
    ```
 
 ### Step 3: Enable Discord OAuth
+
+> Full walkthrough with code: **[docs/DISCORD_OAUTH.md](docs/DISCORD_OAUTH.md)**
+> (Discord Developer Portal app, Appwrite adapter, redirect URI, scopes,
+> session/profile access, token refresh).
 
 1. In Appwrite Console → **Auth** → **OAuth2**
 2. Find **Discord** and click **Enable**
@@ -158,6 +162,16 @@ Each version gets its own icon from the `icons/` directory.
 3. Search icon folders: preferred game → fallback order (yw3 → yw2 → ykb → b2)
 4. If not found, generate a colored placeholder with initials
 
+### Loading Saves (multi-file + mobile)
+
+- **Desktop**: select `game1.yw` (or `gameN.yw`) — the app auto-detects the game
+  (tries YW1 → YW2 → YW3 → Blasters 1 → Blasters 2 until one decrypts).
+- **Select `head.yw` together** with the game file (multi-select) so YW2/YW3/Blasters
+  saves can derive their AES key. Both `head.yw` and `head.yw_g` are accepted.
+- **iOS / Android (single-file pickers)**: pick the game file first. If it needs a
+  `head.yw`, the app reopens the file picker and asks for it — just pick `head.yw`
+  (or `head.yw_g`) on the second step. `game*.yw_g` files work the same way.
+
 ### Context Menus
 - **Desktop**: Right-click a yokai cell → Export/Copy/Details
 - **Desktop**: Right-click blank spot → Import .yk file
@@ -178,6 +192,25 @@ Individual yokai files are raw binary copies of the yokai's entry from section 0
 | .ykb2   | Blasters 2     | 76 B   |
 
 ## Troubleshooting
+
+**`Failed to decrypt: v.test is not a function`**
+
+Old bug: the version-detection loop called a regex object as if it were a function
+(`v.test(hint)` instead of `v.match.test(hint)`). Fixed — redeploy the current files.
+
+**`Failed to decrypt: CCM auth failed` / wrong yokai / section errors**
+
+The browser crypto port had three bugs, all fixed and verified against real saves
+(YW2, YW3, Blasters 2 — counts match the Python reference):
+
+1. `Xorshift` seeding used 64-bit `*` instead of 32-bit `Math.imul` — broke every
+   decryption for seeds above ~2^21.
+2. The CCM keystream counter only incremented byte 15 — saves larger than 65 KB
+   (most real saves) decrypted wrong.
+3. The section-tree parser mishandled container nodes and the wrong 32-byte offset.
+
+If you still see this, you're running stale files — re-copy the `js/` folder to your
+GitHub Pages repo.
 
 **`Appwrite is not defined` / script blocked due to MIME type mismatch**
 

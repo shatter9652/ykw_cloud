@@ -4,6 +4,7 @@
  */
 let _saves={},_cloudBoxes=[],_currentGame=null,_boxIdx=0,_selSlot=null;
 let _cloudBoxIdx=0,_viewMode="save"; // "save" | "cloud"
+let _pendingGame=null; // {buf,file} waiting for head.yw / head.yw_g (iOS two-step)
 
 async function initApp(){
   await loadIconData();
@@ -29,66 +30,96 @@ function updateAuthUI(user){
   }
 }
 
-async function handleSaveFile(e){
-  const files=Array.from(e.target.files);
-  if(!files.length)return;
+const ALL_GAMES=["yw1","yw2","yw3","ykb","b2"];
 
-  // Find the save file and optional head.yw
-  const file=files.find(f=>/\.yw$|\.yw_g$|\.bin$/i.test(f.name));
-  const headFile=files.find(f=>f.name.toLowerCase()==="head.yw");
-
-  if(!file){
-    alert("Please select a .yw, .yw_g, or .bin save file.");
-    return;
-  }
-
-  const readFile=file=>new Promise((resolve,reject)=>{
+function makeFileReader(){
+  return file=>new Promise((resolve,reject)=>{
     const reader=new FileReader();
     reader.onload=()=>resolve(new Uint8Array(reader.result));
     reader.onerror=()=>reject(reader.error);
     reader.readAsArrayBuffer(file);
   });
+}
 
-  try{
-    const buf=await readFile(file);
-    const header=buf.slice(0,64);
-    const ver=detectGameVersion(file.name,header);
-    const gameId=ver.id;
+// Try candidates in a sensible order (hint first, like the Python auto-detector)
+function candidateOrder(name,hintVer){
+  if(hintVer&&ALL_GAMES.includes(hintVer.id))return[hintVer.id,...ALL_GAMES.filter(g=>g!==hintVer.id)];
+  const n=(name||"").toLowerCase();
+  const hints={"yw1":["yw1","yokai_watch_1"],"yw2":["yw2","yokai_watch_2"],"yw3":["yw3","yokai_watch_3","yokai3"],"ykb":["ykb","busters","blasters"],"b2":["b2","blasters2"]};
+  for(const g of ALL_GAMES){if(hints[g].some(h=>n.includes(h)))return[g,...ALL_GAMES.filter(x=>x!==g)];}
+  return ALL_GAMES;
+}
 
-    let headData=null;
+// Try every game pipeline until one decrypts + parses (mirrors SaveHandler.load)
+async function loadSaveIntoView(g,headData){
+  const name=g.file.name;
+  const header=g.buf.slice(0,64);
+  const hintVer=detectGameVersion(name,header);
+  const order=candidateOrder(name,hintVer);
+  const errors=[];
+  for(const gameId of order){
+    try{
+      const result=await decryptSave(g.buf,headData,gameId);
+      const yokai=extractYokai(result.data,gameId);
+      const ver=(hintVer&&hintVer.id===gameId)?hintVer:(GAME_VERSIONS.find(v=>v.id===gameId)||hintVer);
+      _saves[gameId]={game:gameId,version:ver,yokai,file:name,raw:g.buf,result};
+      _currentGame=gameId;_boxIdx=0;_selSlot=null;
+      renderSaveCards();renderGrid();
+      document.getElementById("welcome").style.display="none";
+      document.getElementById("box-view").style.display="flex";
+      return true;
+    }catch(err){errors.push(`${gameId}: ${err.message}`);}
+  }
+  if(headData)throw new Error(errors.join(" | "));
+  return false;
+}
 
-    // Load head.yw if it was selected
-    if(headFile){
-      headData=await readFile(headFile);
+async function handleSaveFile(e){
+  const files=Array.from(e.target.files);
+  e.target.value="";
+  if(!files.length)return;
+  const readFile=makeFileReader();
+
+  // Step 2 of a two-step load: user is picking head.yw / head.yw_g now
+  if(_pendingGame){
+    const head=files.find(f=>/^head\./i.test(f.name));
+    if(head){
+      try{
+        const p=_pendingGame;_pendingGame=null;
+        const headData=await readFile(head);
+        await loadSaveIntoView(p,headData);
+      }catch(err){alert(`Failed to decrypt: ${err.message}`);}
+    }else{
+      alert("Pick the head.yw file (name starts with 'head').");
+      document.getElementById("file-input").click();
     }
-
-    const result=await decryptSave(buf,headData,gameId);
-    const yokai=extractYokai(result.data,gameId);
-
-    _saves[gameId]={
-      game:gameId,
-      version:ver,
-      yokai,
-      file:file.name,
-      raw:buf,
-      result
-    };
-
-    _currentGame=gameId;
-    _boxIdx=0;
-    _selSlot=null;
-
-    renderSaveCards();
-    renderGrid();
-
-    document.getElementById("welcome").style.display="none";
-    document.getElementById("box-view").style.display="flex";
-
-  }catch(err){
-    alert(`Failed to decrypt: ${err.message}`);
+    return;
   }
 
-  e.target.value="";
+  const isHead=f=>/^head\./i.test(f.name);
+  const isGame=f=>/\.(yw|yw_g|bin)$/i.test(f.name)&&!isHead(f);
+  const head=files.find(isHead);
+  const game=files.find(isGame);
+  if(!game){alert("Select a save file (.yw / .yw_g / .bin), optionally together with head.yw.");return;}
+
+  try{
+    const buf=await readFile(game);
+    let headData=null;
+    if(head)headData=await readFile(head);
+
+    if(headData){
+      await loadSaveIntoView({buf,file:game},headData);
+      return;
+    }
+
+    // No head yet: try headless candidates (YW1 / YW2 fixed-key)
+    const ok=await loadSaveIntoView({buf,file:game},null);
+    if(!ok){
+      _pendingGame={buf,file:game};
+      alert("This save needs its head.yw (or head.yw_g) file — pick it now.");
+      document.getElementById("file-input").click();
+    }
+  }catch(err){alert(`Failed to decrypt: ${err.message}`);}
 }
 
 function renderSaveCards(){
