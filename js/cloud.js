@@ -43,9 +43,9 @@ function _storedEmail(){return localStorage.getItem(_EMAIL_KEY)||"";}
 function _makeClient(token,useCookie){
   const{Client,Databases,Storage}=Appwrite;
   const c=new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT);
-  // When useCookie===false, disable cookies so browser uses credentials:'omit'
-  // This prevents the session cookie from being sent alongside the JWT header
-  if(useCookie===false)c.setCookie(false);
+  // ALWAYS disable cookies when JWT is set — prevents "JWT and cookie used
+  // in the same request" 403 error on EVERY code path (initAppwrite, checkAuth, etc.)
+  if(token||useCookie===false)c.setCookie(false);
   if(token)c.setJWT(token);
   _db=new Databases(c);_sto=new Storage(c);
   return c;
