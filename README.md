@@ -49,10 +49,14 @@ A **pure client-side** Yo-kai Watch save viewer with cloud storage, modeled afte
 2. Find **Discord** and click **Enable**
 3. Go to [Discord Developer Portal](https://discord.com/developers/applications)
 4. Create a new application (or use existing)
-5. Go to **OAuth2** → **Redirects** and add:
+5. Go to **OAuth2** → **Redirects** and add **exactly** the callback URI Appwrite shows
+   in its Discord adapter settings (it includes your project ID):
    ```
-   https://tor.cloud.appwrite.io/v1/account/sessions/oauth2/callback/discord
+   https://tor.cloud.appwrite.io/v1/account/sessions/oauth2/callback/discord/6a86504b0033f733c338
    ```
+   > ⚠️ Use the URI exactly as Appwrite displays it. A missing project-ID suffix
+   > (or a `cloud.appwrite.io` host) makes Discord reject the redirect and the
+   > login silently fails.
 6. Copy the **Client ID** and **Client Secret** from Discord into Appwrite
 7. In Appwrite OAuth2 settings for Discord, set **Scopes** to: `identify email`
 
@@ -102,9 +106,9 @@ const BUCKET_ID         = "your-bucket-id-here";
 
 ### Step 8: Update Discord Redirect URI
 
-After deploying, confirm the Discord OAuth redirect URI in the Discord Developer Portal points at **your** Appwrite endpoint:
+After deploying, confirm the Discord OAuth redirect URI in the Discord Developer Portal matches **exactly** what Appwrite displays (project ID suffix included):
 ```
-https://tor.cloud.appwrite.io/v1/account/sessions/oauth2/callback/discord
+https://tor.cloud.appwrite.io/v1/account/sessions/oauth2/callback/discord/6a86504b0033f733c338
 ```
 (This stays the same — Appwrite handles the redirect back to your site)
 

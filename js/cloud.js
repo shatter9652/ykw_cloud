@@ -3,7 +3,7 @@
  * Appwrite = persistent file storage only. Users login via Discord.
  * Uses Appwrite SDK v15 (classic documents API, positional args).
  */
-let _acct=null,_db=null,_sto=null,_user=null;
+let _acct=null,_db=null,_sto=null,_user=null,_discordProfile=null;
 function initAppwrite(){
   const{Client,Account,Databases,Storage}=Appwrite;
   const c=new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT);
@@ -14,7 +14,25 @@ function loginDiscord(){
   const s=window.location.origin+window.location.pathname;
   _acct.createOAuth2Session("discord",s,s+"?error=auth",["identify","email"]);
 }
-async function logout(){await _acct.deleteSession("current");_user=null;}
+async function logout(){await _acct.deleteSession("current");_user=null;_discordProfile=null;}
+
+// Fetch the Discord profile (username/avatar) using the OAuth access token.
+// The Appwrite account object has no avatar field — Discord's API does.
+async function fetchDiscordProfile(){
+  try{
+    const s=await _acct.getSession("current");
+    if(!s||!s.providerAccessToken)return null;
+    const r=await fetch("https://discord.com/api/users/@me",{headers:{Authorization:"Bearer "+s.providerAccessToken}});
+    if(!r.ok)return null;
+    _discordProfile=await r.json();
+    return _discordProfile;
+  }catch(e){return null;}
+}
+function discordAvatarUrl(d,size=64){
+  if(!d||!d.id)return "";
+  if(d.avatar)return`https://cdn.discordapp.com/avatars/${d.id}/${d.avatar}.png?size=${size}`;
+  return`https://cdn.discordapp.com/embed/avatars/${Number(d.discriminator||0)%5}.png`;
+}
 
 async function loadCloudBoxes(){
   if(!_user)return[];

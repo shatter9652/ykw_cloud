@@ -11,19 +11,32 @@ async function initApp(){
   initContextMenu();
   initAppwrite();
   const user=await checkAuth();
+  if(user){await fetchDiscordProfile();}
   updateAuthUI(user);
   document.getElementById("file-input").addEventListener("change",handleSaveFile);
+  setupGridDrop();
+  if(new URLSearchParams(window.location.search).has("error")){
+    alert("Discord login failed. Check the OAuth redirect URI in the Discord Developer Portal — it must match Appwrite's callback URL exactly.");
+  }
 }
+
+async function doLogout(){await logout();updateAuthUI(null);}
 
 function updateAuthUI(user){
   const btn=document.getElementById("auth-btn");
   const userEl=document.getElementById("user-info");
   if(user){
-    btn.textContent="Logout";
-    btn.onclick=async()=>{await logout();updateAuthUI(null);};
-    userEl.textContent=user.name||user.email||"Logged in";
-    userEl.style.display="inline";
+    btn.style.display="none";
+    userEl.style.display="inline-flex";
+    const d=_discordProfile||{};
+    const name=d.global_name||d.username||user.name||user.email||"User";
+    const avatar=discordAvatarUrl(d);
+    userEl.innerHTML=`
+      <img class="user-avatar" src="${avatar}" alt="" onerror="this.style.display='none'">
+      <span class="user-name">${name.replace(/</g,"&lt;")}</span>
+      <button class="btn small" onclick="doLogout()">Logout</button>`;
   }else{
+    btn.style.display="";
     btn.textContent="Login with Discord";
     btn.onclick=()=>loginDiscord();
     userEl.style.display="none";
@@ -302,6 +315,36 @@ function _placeYokaiInBox(boxNum,slot,yokai){
   }
 }
 function refreshCloud(){loadCloudView();}
+
+// ── Quick yokai import (button + drag & drop) ─────────────────
+function quickImportYokai(){
+  const save=_saves[_currentGame];
+  if(!save){alert("Open a save first.");return;}
+  const start=_boxIdx*MONS_PER_BOX;
+  const used=new Set(save.yokai.map(y=>y.slot));
+  let slot=start;
+  while(slot<start+MONS_PER_BOX&&used.has(slot))slot++;
+  if(slot>=start+MONS_PER_BOX){alert("This box is full — go to another box.");return;}
+  importYkFile(_boxIdx,slot);
+}
+
+function setupGridDrop(){
+  const grid=document.getElementById("box-grid");
+  if(!grid)return;
+  grid.addEventListener("dragover",e=>{e.preventDefault();});
+  grid.addEventListener("drop",e=>{
+    e.preventDefault();
+    const file=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
+    if(!file||!/\.(yk1|yk2|yk3|ykb|ykb2|yk|bin)$/i.test(file.name))return;
+    const save=_saves[_currentGame];
+    if(!save)return;
+    const rect=grid.getBoundingClientRect();
+    const col=Math.min(MONS_PER_ROW-1,Math.max(0,Math.floor((e.clientX-rect.left)/(rect.width/MONS_PER_ROW))));
+    const row=Math.min(MONS_PER_COL-1,Math.max(0,Math.floor((e.clientY-rect.top)/(rect.height/MONS_PER_COL))));
+    const slot=row*MONS_PER_ROW+col;
+    importYkFile(_boxIdx,slot);
+  });
+}
 
 // ── Keyboard shortcuts ────────────────────────────────────────
 document.addEventListener("keydown",e=>{

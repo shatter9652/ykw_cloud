@@ -22,13 +22,17 @@ Appwrite createOAuth2Session("discord")  ──►  Discord OAuth consent screen
 3. Open **OAuth2** → **General** in the left sidebar.
 4. Copy the **Client ID** and **Client Secret** (reset the secret if "Reset Secret"
    is shown — that's just the current one).
-5. Under **Redirects**, click **Add Redirect** and add Appwrite's callback URI:
+5. Under **Redirects**, click **Add Redirect** and add **exactly** the callback URI
+   Appwrite shows in its Discord adapter settings — it includes your **project ID**
+   suffix (this project: `6a86504b0033f733c338`):
    ```
-   https://tor.cloud.appwrite.io/v1/account/sessions/oauth2/callback/discord
+   https://tor.cloud.appwrite.io/v1/account/sessions/oauth2/callback/discord/6a86504b0033f733c338
    ```
-   > ⚠️ The host is **your** Appwrite endpoint region (`tor.cloud.appwrite.io`),
-   > **not** `cloud.appwrite.io` and not your GitHub Pages URL. Appwrite handles
-   > the redirect back to your site automatically.
+   > ⚠️ Use the URI exactly as Appwrite displays it. The host must be **your**
+   > Appwrite endpoint region (`tor.cloud.appwrite.io`), **not** `cloud.appwrite.io`
+   > and not your GitHub Pages URL. A missing project-ID suffix makes Discord
+   > reject the redirect and the login silently fails (you stay a guest → the
+   > `401 missing scopes (["account"])` error).
 
 ## Step 2 — Add the Discord OAuth adapter to Appwrite
 
@@ -37,8 +41,10 @@ Appwrite createOAuth2Session("discord")  ──►  Discord OAuth consent screen
 3. Under **OAuth2 providers**, click **Discord** → **Enable**.
 4. Paste the **Client ID** and **Client Secret** from Step 1.
 5. Set **Scopes** to: `identify email`
-6. Save. Appwrite shows the exact callback URI to keep in Discord (it must match
-   Step 1.5).
+6. Save. Appwrite shows the exact callback URI to keep in Discord — copy it
+   verbatim (it ends with `/callback/discord/<projectId>`) and make sure it matches
+   Step 1.5. **Discord OAuth automatically creates the Appwrite user account on
+   first login** — no account creation code is needed.
 
 ## Step 3 — Add a Web Platform (CORS)
 
@@ -130,6 +136,13 @@ if (session.providerAccessTokenExpiry && Date.now() > session.providerAccessToke
   await _acct.updateSession({ sessionId: "current" });
 }
 ```
+
+## How the account is created
+
+Appwrite's OAuth2 adapter **auto-creates the user account** the first time someone
+signs in with Discord — there is no signup form and no extra code. The returned
+user (`account.get()`) is a normal Appwrite user whose `$id` is the per-user key
+for cloud boxes and save files.
 
 ## How user identity maps to cloud data
 
