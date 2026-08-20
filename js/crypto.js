@@ -160,6 +160,7 @@ async function decryptYKB(data,hd){
   throw new Error("Blasters failed with all configs: "+lastErr.message);
 }
 async function decryptSave(data,hd,game){
+  if(game==="yw4")return{data:new Uint8Array(data),aesKey:null,seed:null,nonce:null}; // YW4 is plaintext
   if(game==="yw1"){const p=ywDecrypt(data);return{data:p.plain,aesKey:null,seed:p.seed,nonce:null};}
   if(game==="yw3")return decryptYW3(data,hd);
   if(game==="ykb")return decryptYKB(data,hd);
@@ -202,6 +203,7 @@ function parseTree(buf){
 }
 
 function extractYokai(dec,game){
+  if(game==="yw4")return extractYokaiYW4(dec);
   const gi=GAMES[game];if(!gi)return[];
   const sec=parseTree(dec);if(!sec[0x07])throw new Error("Section 0x07 missing");
   const sd=sec[0x07];const sv=new DataView(sd.buffer,sd.byteOffset,sd.byteLength);
@@ -217,6 +219,36 @@ function extractYokai(dec,game){
   }
   return entries;
 }
+
+// YW4 flat binary extraction (no section tree, no encryption)
+function extractYokaiYW4(dec){
+  const dv=new DataView(dec.buffer,dec.byteOffset,dec.byteLength);
+  // Check magic 0xEEFF
+  if(dv.getUint16(0,true)!==0xEEFF)throw new Error("Not a YW4 save (missing 0xEEFF magic)");
+  const entries=[];
+  // Party (6 entries × 469 bytes at offset 166627)
+  const partyOff=166627,entrySize=469;
+  for(let i=0;i<6;i++){
+    const off=partyOff+i*entrySize;
+    const id1=dv.getUint16(off,true),id2=dv.getUint16(off+2,true);
+    if(!id2)continue;
+    const sig=formatSig(dec,off+72);
+    const name=YW4_SIG_MAP[sig]||"Unknown";
+    entries.push({slot:i,yokai_id:id1,level:dv.getInt32(off+180,true),is_team:true,raw:new Uint8Array(dec.buffer,dec.byteOffset+off,entrySize),game:"yw4",name,sig});
+  }
+  // User yokai (400 entries × 469 bytes at offset 169449)
+  const yokaiOff=169449;
+  for(let i=0;i<400;i++){
+    const off=yokaiOff+i*entrySize;
+    const id1=dv.getUint16(off,true),id2=dv.getUint16(off+2,true);
+    if(!id2)continue;
+    const sig=formatSig(dec,off+72);
+    const name=YW4_SIG_MAP[sig]||"Unknown";
+    entries.push({slot:6+i,yokai_id:id1,level:dv.getInt32(off+180,true),is_team:false,raw:new Uint8Array(dec.buffer,dec.byteOffset+off,entrySize),game:"yw4",name,sig});
+  }
+  return entries;
+}
+function formatSig(buf,off){return `${buf[off].toString(16).padStart(2,"0")}-${buf[off+1].toString(16).padStart(2,"0")}-${buf[off+2].toString(16).padStart(2,"0")}-${buf[off+3].toString(16).padStart(2,"0")}`.toUpperCase();}
 
 // ── Save re-encryption ──────────────────────────────────────
 // Takes the decryption result (from decryptSave) and re-encrypts it.

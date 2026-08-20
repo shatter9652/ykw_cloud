@@ -176,7 +176,7 @@ function updateAuthUI(user){
   }
 }
 
-const ALL_GAMES=["yw1","yw2","yw3","ykb","b2"];
+const ALL_GAMES=["yw1","yw2","yw3","ykb","b2","yw4"];
 
 function makeFileReader(){
   return file=>new Promise((resolve,reject)=>{
@@ -191,7 +191,7 @@ function makeFileReader(){
 function candidateOrder(name,hintVer){
   if(hintVer&&ALL_GAMES.includes(hintVer.id))return[hintVer.id,...ALL_GAMES.filter(g=>g!==hintVer.id)];
   const n=(name||"").toLowerCase();
-  const hints={"yw1":["yw1","yokai_watch_1"],"yw2":["yw2","yokai_watch_2"],"yw3":["yw3","yokai_watch_3","yokai3"],"ykb":["ykb","busters","blasters"],"b2":["b2","blasters2"]};
+  const hints={"yw1":["yw1","yokai_watch_1"],"yw2":["yw2","yokai_watch_2"],"yw3":["yw3","yokai_watch_3","yokai3"],"ykb":["ykb","busters","blasters"],"b2":["b2","blasters2"],"yw4":["yw4","yokai_watch_4","userdata"]};
   for(const g of ALL_GAMES){if(hints[g].some(h=>n.includes(h)))return[g,...ALL_GAMES.filter(x=>x!==g)];}
   return ALL_GAMES;
 }

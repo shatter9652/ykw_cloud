@@ -32,9 +32,12 @@ function detectGameVersion(filename,header){
       return GAME_VERSIONS.find(v=>v.id==="yw2"&&v.label.includes("Psychic"));
     }
   }
+  if(name.includes("yw4")||name.includes("userdata")||name.includes("watch_4"))return GAME_VERSIONS.find(v=>v.id==="yw4");
   if(name.includes("yw3"))return GAME_VERSIONS.find(v=>v.id==="yw3"&&v.label.includes("International"));
   if(name.includes("ykb")||name.includes("blaster"))return GAME_VERSIONS.find(v=>v.id==="ykb"&&v.label.includes("Red Cat"));
   if(name.includes("b2"))return GAME_VERSIONS.find(v=>v.id==="b2"&&v.label.includes("Sword"));
+  // Check for YW4 magic bytes (0xEEFF at offset 0)
+  if(header&&header.length>=2&&header[0]===0xFF&&header[1]===0xEE)return GAME_VERSIONS.find(v=>v.id==="yw4");
   return GAME_VERSIONS.find(v=>v.id==="yw2"&&v.label.includes("Psychic"));
 }
 function nameColor(n){let h=0;for(let i=0;i<(n||"").length;i++)h=((h*31)+n.charCodeAt(i))&0xFFFF;return`hsl(${h%360},47%,55%)`;}
