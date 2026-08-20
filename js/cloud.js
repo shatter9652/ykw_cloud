@@ -40,9 +40,12 @@ function _clearSession(){
 }
 function _storedEmail(){return localStorage.getItem(_EMAIL_KEY)||"";}
 
-function _makeClient(token){
+function _makeClient(token,useCookie){
   const{Client,Databases,Storage}=Appwrite;
   const c=new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT);
+  // When useCookie===false, disable cookies so browser uses credentials:'omit'
+  // This prevents the session cookie from being sent alongside the JWT header
+  if(useCookie===false)c.setCookie(false);
   if(token)c.setJWT(token);
   _db=new Databases(c);_sto=new Storage(c);
   return c;
@@ -107,10 +110,14 @@ async function _promoteToJwt(){
     const res=await _acct.createJWT({duration:3600});  // Max 1 hour
     if(res&&res.jwt){
       localStorage.setItem(_JWT_KEY,res.jwt);
-      localStorage.removeItem("cookieFallback");  // Clear cookie fallback to avoid JWT+cookie conflict
-      const c=_makeClient(res.jwt);
+      localStorage.removeItem("cookieFallback");
+      // Create new client with JWT + cookies DISABLED.
+      // setCookie(false) makes the SDK use credentials:'omit' in fetch(),
+      // which tells the browser NOT to send session cookies.
+      // This prevents the "JWT and cookie used in the same request" 403 error.
+      const c=_makeClient(res.jwt,false);
       _acct=new Appwrite.Account(c);
-      _log("Promoted to JWT ✓ (1h duration)");
+      _log("Promoted to JWT ✓ (1h duration) — cookies disabled");
     }
   }catch(e){
     _log("JWT promotion failed:",e.message);
