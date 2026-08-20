@@ -1,8 +1,15 @@
-# Discord OAuth Sign-In (via Appwrite)
+# Authentication — Discord OAuth + Email/Password
 
-Users log in to YKW Home with **Discord** (not an Appwrite account). Appwrite is
-only used as the backend that stores cloud boxes and save files — the Discord
-OAuth adapter in Appwrite Auth handles the "Sign in with Discord" flow.
+YKW Home supports two login methods:
+
+1. **Discord OAuth** — users sign in with their Discord account (via Appwrite's OAuth adapter)
+2. **Email/Password** — alternative login without Discord (Appwrite manages accounts directly)
+
+Both methods create an Appwrite session. The email/password method immediately
+creates a JWT (stored in localStorage), which avoids all cross-origin cookie issues.
+The Discord method relies on the session cookie + fallback mechanism.
+
+Appwrite is only used as the backend that stores cloud boxes and save files.
 
 ```
 User clicks "Login with Discord"
@@ -157,6 +164,24 @@ const rows = await _db.listDocuments(DB_ID, COLLECTION_ID, [
 
 Each Discord account is a separate user with its own cloud boxes and save files.
 
+## Email/Password Alternative (no Discord needed)
+
+If Discord OAuth doesn't work (third-party cookie issues, etc.), users can sign up
+and login with **email/password** instead. This is managed directly by Appwrite:
+
+1. Click **Sign In** → switch to the **Email** tab
+2. Click **Sign up** → enter name, email, password
+3. Account is created in Appwrite, then auto-logged-in
+4. A JWT is stored in localStorage immediately — no cookies needed
+
+The email/password method avoids all cross-origin cookie issues because it:
+- Creates a session via `createEmailPasswordSession()` (server-side)
+- Immediately promotes to JWT via `createJWT()` (localStorage + Bearer header)
+- All subsequent requests use the JWT — no cookies involved
+
+**Note**: You need to enable **Email/Password** auth in Appwrite Console → Auth →
+Settings → Email/Password (toggle ON).
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -166,9 +191,9 @@ Each Discord account is a separate user with its own cloud boxes and save files.
 | Login works but cloud calls fail with CORS errors | Step 3 — add `shatter9652.github.io` (and `localhost`) as Web Platforms |
 | `401`/`403` saving yokai | Collection/bucket permissions must include the `Any` role (see main README steps 4–5) |
 | Users logged in as "unknown" | The `identify` scope is missing from the Appwrite Discord adapter |
-| OAuth completes but still 401 (`missing scopes`) | **Cookie not being sent** — the session cookie set by Appwrite during the OAuth callback may be blocked by `SameSite=Lax` or third-party cookie settings. The app has a `_bootstrapSession` fallback that tries: (1) reading cookies from `document.cookie`, (2) raw `fetch` with `credentials: "include"` to capture `X-Fallback-Cookies`. If neither works, open DevTools → Application → Cookies → `tor.cloud.appwrite.io` and check if `a_session_6a86504b0033f733c338` exists. If it does, the cookie IS set but blocked by SameSite — allow third-party cookies for `tor.cloud.appwrite.io`. **Once the first auth succeeds**, the app creates a JWT and stores it in localStorage (`ykw_jwt`). All subsequent requests use the JWT header — no more cookie issues. |
-| Works in one browser but not another | Different browsers have different default third-party cookie policies (Chrome 130+ blocks them by default). Add `tor.cloud.appwrite.io` as a **tracking exception** in browser settings, or test in Firefox (which still allows third-party cookies). |
-| Login works once, then fails on reload | The saved JWT expired (JWTs default to the session lifetime). Click Login with Discord again — after the first successful auth, a new JWT is created and stored. |
+| OAuth completes but still 401 (`missing scopes`) | **Cookie not being sent** — the session cookie set by Appwrite during the OAuth callback may be blocked by `SameSite=Lax` or third-party cookie settings. The app has a `_bootstrapSession` fallback that tries: (1) reading cookies from `document.cookie`, (2) raw `fetch` with `credentials: "include"` to capture `X-Fallback-Cookies`. If neither works, open DevTools → Application → Cookies → `tor.cloud.appwrite.io` and check if `a_session_6a86504b0033f733c338` exists. If it does, the cookie IS set but blocked by SameSite — allow third-party cookies for `tor.cloud.appwrite.io`. **Once the first auth succeeds**, the app creates a JWT and stores it in localStorage (`ykw_jwt`). All subsequent requests use the JWT header — no more cookie issues. **Workaround**: Use Email/Password auth instead — it works in all browsers without cookie issues. |
+| Works in one browser but not another | Different browsers have different default third-party cookie policies (Chrome 130+ blocks them by default). Add `tor.cloud.appwrite.io` as a **tracking exception** in browser settings, or test in Firefox (which still allows third-party cookies). **Or use Email/Password auth.** |
+| Login works once, then fails on reload | The saved JWT expired (JWTs default to the session lifetime). Click Login again — after the first successful auth, a new JWT is created and stored. |
 | 3DS-RPC style: same-origin session approach | 3DS-RPC avoids this entire problem by doing the OAuth code exchange server-side and setting plain same-origin cookies. YKW Home is a pure client-side app (GitHub Pages + Appwrite), so it relies on Appwrite's cookie/session management. The JWT promotion (localStorage + Bearer header) is the equivalent fix — no cookies needed after the first login. |
 
 ## Reference

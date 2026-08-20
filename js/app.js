@@ -17,10 +17,72 @@ async function initApp(){
   setupGridDrop();
   if(new URLSearchParams(window.location.search).has("error")){
     alert("Discord login failed. Check the OAuth redirect URI in the Discord Developer Portal — it must match Appwrite's callback URL exactly.");
+    // Clean up the URL
+    window.history.replaceState({},document.title,window.location.pathname);
   }
 }
 
-async function doLogout(){await logout();updateAuthUI(null);}
+async function doLogout(){
+  await logout();
+  updateAuthUI(null);
+}
+
+// ── Auth modal ───────────────────────────────────────────────
+function showAuthModal(){
+  document.getElementById("auth-modal").style.display="flex";
+  document.getElementById("auth-error").style.display="none";
+  showLoginForm();
+}
+function closeAuthModal(){
+  document.getElementById("auth-modal").style.display="none";
+}
+function switchAuthTab(tab){
+  document.querySelectorAll(".auth-tab").forEach(t=>t.classList.toggle("active",t.dataset.tab===tab));
+  document.getElementById("auth-discord-tab").style.display=tab==="discord"?"":"none";
+  document.getElementById("auth-email-tab").style.display=tab==="email"?"":"none";
+  document.getElementById("auth-error").style.display="none";
+}
+function showLoginForm(){
+  document.getElementById("email-login-form").style.display="";
+  document.getElementById("email-signup-form").style.display="none";
+}
+function showSignupForm(){
+  document.getElementById("email-login-form").style.display="none";
+  document.getElementById("email-signup-form").style.display="";
+}
+function showAuthError(msg){
+  const el=document.getElementById("auth-error");
+  el.textContent=msg;el.style.display="";
+}
+async function doLoginDiscord(){
+  loginDiscord();
+}
+async function doLoginEmail(){
+  const email=document.getElementById("auth-email").value.trim();
+  const pass=document.getElementById("auth-password").value;
+  if(!email||!pass){showAuthError("Enter email and password.");return;}
+  try{
+    const user=await loginEmail(email,pass);
+    updateAuthUI(user);
+    closeAuthModal();
+  }catch(e){
+    showAuthError(e.message||"Login failed.");
+  }
+}
+async function doSignupEmail(){
+  const name=document.getElementById("auth-name").value.trim();
+  const email=document.getElementById("auth-signup-email").value.trim();
+  const pass=document.getElementById("auth-signup-password").value;
+  if(!email||!pass){showAuthError("Enter email and password.");return;}
+  if(pass.length<8){showAuthError("Password must be at least 8 characters.");return;}
+  try{
+    const user=await signupEmail(name,email,pass);
+    updateAuthUI(user);
+    closeAuthModal();
+  }catch(e){
+    showAuthError(e.message||"Signup failed.");
+  }
+}
 
 function updateAuthUI(user){
   const btn=document.getElementById("auth-btn");
@@ -28,18 +90,27 @@ function updateAuthUI(user){
   if(user){
     btn.style.display="none";
     userEl.style.display="inline-flex";
+    // Try Discord profile first, then fall back to Appwrite user
     const d=_discordProfile||{};
     const name=d.global_name||d.username||user.name||user.email||"User";
     const avatar=discordAvatarUrl(d);
+    // If no Discord avatar, generate a colored initial circle
+    const avatarHtml=avatar
+      ?`<img class="user-avatar" src="${avatar}" alt="" onerror="this.style.display='none'">`
+      :`<div class="user-avatar placeholder-avatar" style="background:${nameColor(name)};width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;color:#fff;">${(name||"?")[0].toUpperCase()}</div>`;
     userEl.innerHTML=`
-      <img class="user-avatar" src="${avatar}" alt="" onerror="this.style.display='none'">
+      ${avatarHtml}
       <span class="user-name">${name.replace(/</g,"&lt;")}</span>
       <button class="btn small" onclick="doLogout()">Logout</button>`;
+    // Enable cloud buttons
+    document.querySelectorAll("[data-requires-auth]").forEach(b=>b.disabled=false);
   }else{
     btn.style.display="";
-    btn.textContent="Login with Discord";
-    btn.onclick=()=>loginDiscord();
+    btn.textContent="Sign In";
+    btn.onclick=()=>showAuthModal();
     userEl.style.display="none";
+    // Disable cloud buttons
+    document.querySelectorAll("[data-requires-auth]").forEach(b=>b.disabled=true);
   }
 }
 

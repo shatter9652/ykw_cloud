@@ -2,12 +2,13 @@
 
 ## What is this?
 
-A **pure client-side** Yo-kai Watch save viewer with cloud storage, modeled after [Unbound Cloud](https://unboundcloud.net). Users login via Discord, and their yokai/save files are stored persistently via Appwrite.
+A **pure client-side** Yo-kai Watch save viewer with cloud storage, modeled after [Unbound Cloud](https://unboundcloud.net). Users login via Discord **or email/password**, and their yokai/save files are stored persistently via Appwrite.
 
 ## Features
 
 - **Client-side decryption** — IeCCode + AES-CCM in JavaScript (no server needed for saves)
 - **Discord OAuth login** — users authenticate via Discord (see [docs/DISCORD_OAUTH.md](docs/DISCORD_OAUTH.md))
+- **Email/Password auth** — alternative login without Discord (Appwrite manages accounts)
 - **Cloud boxes** — 100 boxes × 30 yokai = 3,000 capacity per user (Appwrite database)
 - **Save file storage** — upload/download .yw files to Appwrite cloud storage
 - **Export yokai** — right-click (desktop) or double-tap (mobile) to export as .yk1/.yk2/.yk3/.ykb/.ykb2
@@ -97,14 +98,36 @@ const COLLECTION_ID     = "your-collection-id-here";
 const BUCKET_ID         = "your-bucket-id-here";
 ```
 
-### Step 7: Deploy to GitHub Pages
+### Step 7: Test Locally
+
+Before pushing to GitHub, test locally with HTTPS (required for Appwrite cookies):
+
+```bash
+cd ykw-home/ykw-web
+python3 test-server.py
+# Open https://localhost:8443 (accept the self-signed cert warning)
+```
+
+Or plain HTTP (no secure cookies, but fine for quick UI testing):
+
+```bash
+python3 test-server.py --http
+# Open http://localhost:8443
+```
+
+**Important for local testing:**
+- Add `localhost` as a Web Platform in Appwrite Console (Settings → Platforms → Add Platform → Web)
+- Add `http://localhost:8443` AND `https://localhost:8443` to the Discord OAuth redirect URIs
+- The Appwrite CORS policy must allow `localhost`
+
+### Step 8: Deploy to GitHub Pages
 
 1. Push the contents of `ykw-home/ykw-web/` to your GitHub repo
 2. In GitHub → **Settings** → **Pages** → Source: "Deploy from a branch"
 3. Either deploy from the repo root, or from a subfolder (e.g. `/ykw-web`) — **all asset paths are relative**, so sub-path deployments just work (this repo deploys to `https://shatter9652.github.io/ykw_cloud/`)
 4. Your site will be at `https://<username>.github.io/<repo>/` (or the subfolder)
 
-### Step 8: Update Discord Redirect URI
+### Step 9: Update Discord Redirect URI
 
 After deploying, confirm the Discord OAuth redirect URI in the Discord Developer Portal matches **exactly** what Appwrite displays (project ID suffix included):
 ```
@@ -112,11 +135,11 @@ https://tor.cloud.appwrite.io/v1/account/sessions/oauth2/callback/discord/6a8650
 ```
 (This stays the same — Appwrite handles the redirect back to your site)
 
-### Step 9: Test
+### Step 10: Test
 
 1. Open your GitHub Pages URL
-2. Click "Login with Discord"
-3. Authorize the app on Discord
+2. Click "Sign In"
+3. Choose Discord or Email/Password
 4. You should be logged in and see your cloud boxes
 
 ## File Structure
@@ -124,13 +147,14 @@ https://tor.cloud.appwrite.io/v1/account/sessions/oauth2/callback/discord/6a8650
 ```
 ykw-web/
 ├── index.html              ← Main page (loads all JS/CSS)
+├── test-server.py          ← Local HTTPS test server
 ├── css/
 │   └── style.css           ← OpenHome-style dark theme
 ├── js/
 │   ├── config.js           ← Appwrite + Discord config
 │   ├── crypto.js           ← IeCCode + AES-CCM encryption
 │   ├── icons.js            ← Icon resolution + version detection
-│   ├── cloud.js            ← Appwrite DB/Storage + Discord OAuth
+│   ├── cloud.js            ← Appwrite DB/Storage + Discord + Email auth
 │   ├── contextmenu.js      ← Right-click/double-tap export+import
 │   └── app.js              ← Main UI (boxes, grid, detail panel)
 ├── icons/                  ← Game icons (13 PNGs, 48×48)
@@ -227,9 +251,18 @@ The CDN URL must be the **IIFE build** (`dist/iife/sdk.min.js`), not `dist/sdk.m
 
 You forgot Step 2 — the Web Platform. Add `shatter9652.github.io` (and `localhost` for local testing) under **Settings → Platforms → Add Platform → Web**.
 
+**`401 User (role: guests) missing scopes`**
+
+This means no session exists — the user is not logged in. Causes:
+1. **Discord OAuth didn't complete** — check the redirect URI matches exactly (project-ID suffix). Open DevTools → Application → Cookies after the redirect to see if `a_session_*` was set.
+2. **Third-party cookie blocked** — Chrome blocks cross-origin cookies by default. Try Firefox, or add `tor.cloud.appwrite.io` as a cookie exception in Chrome settings.
+3. **Appwrite Web Platform missing** — add `localhost` (local) or `shatter9652.github.io` (production) in Appwrite Console → Settings → Platforms.
+
+**Workaround**: Use **Email/Password** auth instead of Discord — it creates a JWT immediately (no cookie needed), so it works in all browsers without third-party cookie issues.
+
 **`401` / `403` when saving yokai to the cloud**
 
-Check collection and bucket **Permissions** — they must include the `Any` role with Create/Read/Update/Delete (see Steps 4–5). Also make sure the user is logged in via Discord.
+Check collection and bucket **Permissions** — they must include the `Any` role with Create/Read/Update/Delete (see Steps 4–5). Also make sure the user is logged in.
 
 **Using the wrong SDK version breaks everything**
 
@@ -242,7 +275,7 @@ This project pins `appwrite@15.0.0` on purpose — the v15 SDK uses the classic 
 | Framework | React + Node.js | Plain HTML/JS |
 | Encryption | Server-side | Client-side |
 | GitHub Pages | ❌ (needs server) | ✅ |
-| Auth | Email/password | Discord OAuth |
+| Auth | Email/password | Discord OAuth + Email/Password |
 | Cloud storage | Server DB | Appwrite |
 | Game support | Single ROM hack | All YW games |
 | Export .yk files | ❌ | ✅ |
