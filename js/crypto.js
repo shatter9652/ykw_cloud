@@ -217,3 +217,21 @@ function extractYokai(dec,game){
   }
   return entries;
 }
+
+// ── Save re-encryption ──────────────────────────────────────
+// Takes the decryption result (from decryptSave) and re-encrypts it.
+// This allows users to modify yokai data and export a valid save file.
+async function encryptSave(result, game){
+  const{data,aesKey,seed,nonce}=result;
+  if(game==="yw1"){
+    return ywEncrypt(data,seed);
+  }
+  // For AES-CCM games (YW2, YW3, YKB, B2):
+  // Re-encrypt the inner IeCCode payload, then wrap with AES-CCM
+  const inner=ywEncrypt(data,seed);
+  if(aesKey&&nonce){
+    const wrapped=await ccmEnc(aesKey,inner,nonce);
+    return wrapped;
+  }
+  throw new Error("Cannot re-encrypt: missing AES key or nonce");
+}

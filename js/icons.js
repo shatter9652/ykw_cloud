@@ -38,3 +38,25 @@ function detectGameVersion(filename,header){
   return GAME_VERSIONS.find(v=>v.id==="yw2"&&v.label.includes("Psychic"));
 }
 function nameColor(n){let h=0;for(let i=0;i<(n||"").length;i++)h=((h*31)+n.charCodeAt(i))&0xFFFF;return`hsl(${h%360},47%,55%)`;}
+
+// ── Preload all yokai icons at startup ──────────────────────
+// Creates Image objects for every icon so they're cached by the browser
+// before any save file is loaded. This avoids blank icons on first view.
+let _preloaded=false;
+function preloadAllIcons(){
+  if(_preloaded)return;_preloaded=true;
+  if(!_crcIcon||!Object.keys(_crcIcon).length)return;
+  let count=0;
+  for(const[_k,base]of Object.entries(_crcIcon)){
+    if(!base)continue;
+    const fn=base+".00.png";
+    // Try each game directory until we find one that loads
+    for(const g of ICON_FALLBACK){
+      const d=ICON_DIRS[g];if(!d)continue;
+      const img=new Image();
+      img.src=`YoKaiIcons/${d}/${fn}`;
+      count++;
+    }
+  }
+  console.log(`[icons] Preloaded ${count} icon URLs`);
+}

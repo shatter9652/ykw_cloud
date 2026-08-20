@@ -9,22 +9,81 @@
 </head>
 <body>
 <div class="app">
-  <!-- Mobile header (visible only on mobile) -->
-  <div class="mobile-header" id="mobile-header">
-    <div class="mobile-header-left">
+  <!-- Mobile top bar (visible only on mobile) -->
+  <div class="mobile-topbar" id="mobile-topbar">
+    <button class="mobile-icon-btn" id="mobile-hamburger" onclick="toggleMobileSidebar()" title="Menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="mobile-topbar-title">YKW Home</div>
+    <div class="mobile-topbar-right">
+      <span class="mobile-user-pill" id="mobile-user-pill" style="display:none"></span>
       <button class="mobile-icon-btn" id="mobile-auth-btn" onclick="showAuthModal()" title="Sign In">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       </button>
-      <span class="mobile-user-info" id="mobile-user-info" style="display:none"></span>
     </div>
-    <div class="mobile-header-title">YKW Home</div>
-    <div class="mobile-header-right">
-      <button class="mobile-icon-btn" onclick="document.getElementById('file-input').click()" title="Open Save">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+  </div>
+
+  <!-- Mobile sidebar overlay -->
+  <div class="mobile-sidebar-overlay" id="mobile-sidebar-overlay" onclick="toggleMobileSidebar()"></div>
+
+  <!-- Mobile sidebar (slides in from left) -->
+  <div class="mobile-sidebar" id="mobile-sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-brand">🏠 YKW Home</span>
+      <button class="mobile-icon-btn" onclick="toggleMobileSidebar()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
-      <button class="mobile-icon-btn" onclick="quickImportYokai()" title="Import Yokai">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      </button>
+    </div>
+    <div class="sidebar-content">
+      <!-- Auth -->
+      <div class="sidebar-auth" id="sidebar-auth">
+        <button class="btn primary" onclick="toggleMobileSidebar();showAuthModal();">Sign In</button>
+      </div>
+      <!-- Nav -->
+      <div class="sidebar-nav">
+        <button class="sidebar-nav-item active" data-view="save" onclick="navigate('save');toggleMobileSidebar()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg>
+          <span>Home</span>
+        </button>
+        <button class="sidebar-nav-item" data-view="cloud" onclick="navigate('cloud');toggleMobileSidebar()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+          <span>Cloud</span>
+        </button>
+        <button class="sidebar-nav-item" data-view="settings" onclick="navigate('settings');toggleMobileSidebar()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <span>Settings</span>
+        </button>
+      </div>
+      <div class="sidebar-divider"></div>
+      <!-- Actions -->
+      <div class="sidebar-actions">
+        <button class="sidebar-action-btn" onclick="toggleMobileSidebar();document.getElementById('file-input').click()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+          Open Save…
+        </button>
+        <button class="sidebar-action-btn" onclick="toggleMobileSidebar();quickImportYokai()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Import Yokai…
+        </button>
+        <button class="sidebar-action-btn" onclick="toggleMobileSidebar();exportSaveFile()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export Save…
+        </button>
+        <button class="sidebar-action-btn" onclick="toggleMobileSidebar();loadCloudView()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+          Open Cloud Boxes
+        </button>
+        <button class="sidebar-action-btn green" onclick="toggleMobileSidebar();uploadSaveToCloud()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Upload Save to Cloud
+        </button>
+      </div>
+      <div class="sidebar-divider"></div>
+      <!-- Saves list -->
+      <div class="sidebar-saves">
+        <div class="sidebar-saves-header">Saves</div>
+        <div id="sidebar-save-list"></div>
+      </div>
     </div>
   </div>
 
@@ -54,7 +113,7 @@
     <button class="btn primary" onclick="document.getElementById('file-input').click()" style="margin-top:8px">Open Save…</button>
     <button class="btn" onclick="quickImportYokai()" style="margin-top:6px">Import Yokai…</button>
     <button class="btn green" onclick="saveToCloud()" style="margin-top:6px" disabled data-requires-auth id="save-cloud-btn">Save Yokai to Cloud</button>
-    <input type="file" id="file-input" accept=".yw,.yw_g,.bin,.yk1,.yk2,.yk3,.ykb,.ykb2,.yk" multiple style="display:none">
+    <input type="file" id="file-input" accept="*/*" multiple style="display:none">
     <p class="hint">Open a .yw save file — select head.yw together with game1.yw if available (or pick head.yw when asked). Right-click a yokai to export as .yk file. Right-click blank to import.</p>
   </div>
 
@@ -103,6 +162,7 @@
       <h3>Quick Actions</h3>
       <button class="btn primary" onclick="document.getElementById('file-input').click()" style="width:100%;margin-bottom:6px">Open Save…</button>
       <button class="btn green" onclick="loadCloudView()" style="width:100%;margin-bottom:6px">Open Cloud Boxes</button>
+      <button class="btn" onclick="exportSaveFile()" style="width:100%;margin-bottom:6px" disabled data-requires-auth>💾 Export Save…</button>
       <button class="btn" onclick="uploadSaveToCloud()" style="width:100%">Upload Save to Cloud</button>
       <button class="btn" onclick="quickImportYokai()" style="width:100%;margin-top:6px">Import Yokai…</button>
     </div>
@@ -119,21 +179,7 @@
     </div>    </div>
   </div>
 
-  <!-- Mobile bottom nav (visible only on mobile) -->
-  <div class="mobile-bottom-nav" id="mobile-bottom-nav">
-    <button class="mobile-nav-item active" data-view="save" onclick="navigate('save')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg>
-      <span>Home</span>
-    </button>
-    <button class="mobile-nav-item" data-view="cloud" onclick="navigate('cloud')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
-      <span>Cloud</span>
-    </button>
-    <button class="mobile-nav-item" data-view="settings" onclick="navigate('settings')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-      <span>Settings</span>
-    </button>
-  </div>
+
 </div>
 
 <!-- Auth modal -->
@@ -191,12 +237,12 @@
 <!-- Appwrite SDK from CDN (must load before cloud.js) -->
 <script src="https://cdn.jsdelivr.net/npm/appwrite@23.0.0/dist/iife/sdk.min.js"></script>
 <!-- JS files loaded individually -->
-<script src="js/config.js?v=6"></script>
-<script src="js/crypto.js?v=6"></script>
-<script src="js/icons.js?v=6"></script>
-<script src="js/cloud.js?v=6"></script>
-<script src="js/contextmenu.js?v=6"></script>
-<script src="js/app.js?v=6"></script>
+<script src="js/config.js?v=8"></script>
+<script src="js/crypto.js?v=8"></script>
+<script src="js/icons.js?v=8"></script>
+<script src="js/cloud.js?v=8"></script>
+<script src="js/contextmenu.js?v=8"></script>
+<script src="js/app.js?v=8"></script>
 <script>initApp();</script>
 </body>
 </html>

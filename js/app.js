@@ -7,7 +7,22 @@ let _cloudBoxIdx=0,_viewMode="save"; // "save" | "cloud"
 let _pendingGame=null; // {buf,file} waiting for head.yw / head.yw_g (iOS two-step)
 
 async function initApp(){
+  // Safari cache bust: if version changed, force-reload all scripts
+  const lastVersion=localStorage.getItem("ykw_build_version");
+  if(lastVersion&&lastVersion!==APP_VERSION){
+    localStorage.setItem("ykw_build_version",APP_VERSION);
+    // Add cache-bust param to all script tags and reload
+    document.querySelectorAll("script[src]").forEach(s=>{
+      const url=new URL(s.src,location.href);
+      url.searchParams.set("cb",Date.now());
+      s.src=url.toString();
+    });
+    location.reload();
+    return;
+  }
+  localStorage.setItem("ykw_build_version",APP_VERSION);
   await loadIconData();
+  preloadAllIcons();
   initContextMenu();
   initAppwrite();
   // checkAuth() reads ?userId=&secret= from URL (after Discord OAuth redirect)
@@ -111,7 +126,8 @@ function updateAuthUI(user){
   const btn=document.getElementById("auth-btn");
   const userEl=document.getElementById("user-info");
   const mBtn=document.getElementById("mobile-auth-btn");
-  const mUserEl=document.getElementById("mobile-user-info");
+  const mPill=document.getElementById("mobile-user-pill");
+  const sidebarAuth=document.getElementById("sidebar-auth");
   // Try Discord profile first, then fall back to Appwrite user
   const d=_discordProfile||{};
   const uname=d.global_name||d.username||user?.name||user?.email||"User";
@@ -126,14 +142,24 @@ function updateAuthUI(user){
       ${avatarHtml}
       <span class="user-name">${uname.replace(/</g,"&lt;")}</span>
       <button class="btn small" onclick="doLogout()">Logout</button>`;
-    // Mobile: show avatar, hide sign-in button
+    // Mobile topbar: hide auth icon, show user pill
     if(mBtn)mBtn.style.display="none";
-    if(mUserEl){
-      mUserEl.style.display="inline-flex";
-      mUserEl.innerHTML=`
+    if(mPill){
+      mPill.style.display="inline-flex";
+      mPill.innerHTML=`
         ${avatarHtml}
         <span class="user-name">${uname.replace(/</g,"&lt;")}</span>
         <button class="btn small" onclick="doLogout()">Logout</button>`;
+    }
+    // Sidebar: show user card
+    if(sidebarAuth){
+      sidebarAuth.innerHTML=`
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          ${avatarHtml}
+          <div><div style="font-weight:bold;font-size:13px;">${uname.replace(/</g,"&lt;")}</div>
+          <div style="font-size:10px;color:var(--text2);">${user.email||""}</div></div>
+        </div>
+        <button class="btn small" onclick="toggleMobileSidebar();doLogout();" style="width:100%;">Logout</button>`;
     }
     // Enable cloud buttons
     document.querySelectorAll("[data-requires-auth]").forEach(b=>b.disabled=false);
@@ -143,7 +169,8 @@ function updateAuthUI(user){
     btn.onclick=()=>showAuthModal();
     userEl.style.display="none";
     if(mBtn){mBtn.style.display="";mBtn.onclick=()=>showAuthModal();}
-    if(mUserEl)mUserEl.style.display="none";
+    if(mPill)mPill.style.display="none";
+    if(sidebarAuth)sidebarAuth.innerHTML=`<button class="btn primary" onclick="toggleMobileSidebar();showAuthModal();">Sign In</button>`;
     // Disable cloud buttons
     document.querySelectorAll("[data-requires-auth]").forEach(b=>b.disabled=true);
   }
@@ -193,6 +220,25 @@ async function loadSaveIntoView(g,headData){
   return false;
 }
 
+function _validateFile(f){
+  const MAX_SIZE=5*1024*1024; // 5MB
+  const name=(f.name||"").toLowerCase();
+  const ext=name.split(".").pop();
+  const validSaveExt=["yw","yw_g","bin"];
+  const validHeadPrefix=name.startsWith("head");
+  const isSave=validSaveExt.includes(ext);
+  const isHead=validHeadPrefix;
+  if(!isSave&&!isHead){
+    alert(`"${f.name}" is not a supported file type.\n\nAccepted: .yw, .yw_g, .bin\n(head.yw / head.yw_g for iOS)`);
+    return false;
+  }
+  if(f.size>MAX_SIZE){
+    alert(`"${f.name}" is too large (${(f.size/1024/1024).toFixed(1)}MB). Max 5MB.`);
+    return false;
+  }
+  return true;
+}
+
 async function handleSaveFile(e){
   const files=Array.from(e.target.files);
   e.target.value="";
@@ -215,8 +261,11 @@ async function handleSaveFile(e){
     return;
   }
 
+  // Validate all files
+  for(const f of files){if(!_validateFile(f))return;}
+
   const isHead=f=>/^head\./i.test(f.name);
-  const isGame=f=>/\.(yw|yw_g|bin)$/i.test(f.name)&&!isHead(f);
+  const isGame=f=>!isHead(f);  // Any non-head file is a game file
   const head=files.find(isHead);
   const game=files.find(isGame);
   if(!game){alert("Select a save file (.yw / .yw_g / .bin), optionally together with head.yw.");return;}
@@ -243,12 +292,19 @@ async function handleSaveFile(e){
 
 function renderSaveCards(){
   const el=document.getElementById("save-list");el.innerHTML="";
+  const sidebarEl=document.getElementById("sidebar-save-list");if(sidebarEl)sidebarEl.innerHTML="";
   for(const[gid,save]of Object.entries(_saves)){
     const card=document.createElement("div");
     card.className="save-card"+(gid===_currentGame?" selected":"");
     card.onclick=()=>{_currentGame=gid;_boxIdx=0;renderSaveCards();renderGrid();};
     card.innerHTML=`<img src="${save.version.icon}" class="save-icon" onerror="this.src='icons/ykw2psycicspecters.png'"><div><div class="save-name">${save.version.label}</div><div class="save-meta">${save.yokai.length} yokai · ${save.file}</div></div>`;
     el.appendChild(card);
+    // Also add to sidebar save list
+    if(sidebarEl){
+      const sc=card.cloneNode(true);
+      sc.onclick=()=>{_currentGame=gid;_boxIdx=0;renderSaveCards();renderGrid();toggleMobileSidebar();};
+      sidebarEl.appendChild(sc);
+    }
   }
 }
 
@@ -386,7 +442,7 @@ async function saveToCloud(){
 // ── Upload save file to cloud storage ─────────────────────────
 async function uploadSaveToCloud(){
   if(!await checkAuth()){alert("Login with Discord first!");return;}
-  const inp=document.createElement("input");inp.type="file";inp.accept=".yw,.yw_g,.bin,.yk1,.yk2,.yk3,.ykb,.ykb2,.yk";
+  const inp=document.createElement("input");inp.type="file";inp.accept="*/*";
   inp.onchange=async e=>{
     const file=e.target.files[0];if(!file)return;
     try{await uploadSaveFile(file);alert("Save file uploaded!");renderSaveFileList();}
@@ -410,9 +466,18 @@ function showView(v){
   document.querySelectorAll(".page").forEach(p=>p.style.display="none");
   document.getElementById(v+"-page").style.display="flex";
   document.querySelectorAll(".nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
-  document.querySelectorAll(".mobile-nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
+  document.querySelectorAll(".sidebar-nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
 }
 function navigate(v){showView(v);if(v==="cloud")loadCloudView();if(v==="settings")renderSettings();}
+
+// ── Mobile sidebar ──────────────────────────────────────────
+let _sidebarOpen=false;
+function toggleMobileSidebar(){
+  _sidebarOpen=!_sidebarOpen;
+  document.getElementById("mobile-sidebar").classList.toggle("open",_sidebarOpen);
+  document.getElementById("mobile-sidebar-overlay").classList.toggle("open",_sidebarOpen);
+  document.body.style.overflow=_sidebarOpen?"hidden":"";
+}
 
 // ── Place yokai from import ───────────────────────────────────
 function _placeYokaiInBox(boxNum,slot,yokai){
@@ -435,6 +500,25 @@ function quickImportYokai(){
   while(slot<start+MONS_PER_BOX&&used.has(slot))slot++;
   if(slot>=start+MONS_PER_BOX){alert("This box is full — go to another box.");return;}
   importYkFile(_boxIdx,slot);
+}
+
+// ── Export full save file (re-encrypted) ─────────────────────
+async function exportSaveFile(){
+  const save=_saves[_currentGame];
+  if(!save){alert("Open a save first.");return;}
+  try{
+    const enc=await encryptSave(save.result,_currentGame);
+    const blob=new Blob([enc],{type:"application/octet-stream"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    const baseName=(save.file||"save").replace(/\.[^.]+$/,"");
+    const ext=YK_EXT[_currentGame]||".bin";
+    a.download=baseName+ext;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }catch(e){
+    alert("Export failed: "+e.message);
+  }
 }
 
 function setupGridDrop(){
