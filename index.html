@@ -4,10 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>YKW Home — Cloud</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <div class="app">
+  <!-- Mobile header (visible only on mobile) -->
+  <div class="mobile-header" id="mobile-header">
+    <div class="mobile-header-left">
+      <button class="mobile-icon-btn" id="mobile-auth-btn" onclick="showAuthModal()" title="Sign In">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </button>
+      <span class="mobile-user-info" id="mobile-user-info" style="display:none"></span>
+    </div>
+    <div class="mobile-header-title">YKW Home</div>
+    <div class="mobile-header-right">
+      <button class="mobile-icon-btn" onclick="document.getElementById('file-input').click()" title="Open Save">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+      </button>
+      <button class="mobile-icon-btn" onclick="quickImportYokai()" title="Import Yokai">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
+    </div>
+  </div>
+
   <!-- Rail -->
   <div class="rail">
     <button class="nav-btn active" data-view="save" onclick="navigate('save')" title="Home">
@@ -34,7 +54,7 @@
     <button class="btn primary" onclick="document.getElementById('file-input').click()" style="margin-top:8px">Open Save…</button>
     <button class="btn" onclick="quickImportYokai()" style="margin-top:6px">Import Yokai…</button>
     <button class="btn green" onclick="saveToCloud()" style="margin-top:6px" disabled data-requires-auth id="save-cloud-btn">Save Yokai to Cloud</button>
-    <input type="file" id="file-input" accept=".yw,.yw_g,.bin" multiple style="display:none">
+    <input type="file" id="file-input" accept=".yw,.yw_g,.bin,.yk1,.yk2,.yk3,.ykb,.ykb2,.yk" multiple style="display:none">
     <p class="hint">Open a .yw save file — select head.yw together with game1.yw if available (or pick head.yw when asked). Right-click a yokai to export as .yk file. Right-click blank to import.</p>
   </div>
 
@@ -96,7 +116,23 @@
         • Login to save yokai in cloud boxes<br>
         • Upload saves to cloud storage
       </p>
-    </div>
+    </div>    </div>
+  </div>
+
+  <!-- Mobile bottom nav (visible only on mobile) -->
+  <div class="mobile-bottom-nav" id="mobile-bottom-nav">
+    <button class="mobile-nav-item active" data-view="save" onclick="navigate('save')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg>
+      <span>Home</span>
+    </button>
+    <button class="mobile-nav-item" data-view="cloud" onclick="navigate('cloud')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+      <span>Cloud</span>
+    </button>
+    <button class="mobile-nav-item" data-view="settings" onclick="navigate('settings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      <span>Settings</span>
+    </button>
   </div>
 </div>
 
@@ -126,6 +162,7 @@
         <input type="email" id="auth-email" placeholder="you@example.com" autocomplete="email">
         <label>Password</label>
         <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password">
+        <label class="remember-row"><input type="checkbox" id="auth-remember" checked><span>Remember me</span></label>
         <button class="btn primary" onclick="doLoginEmail()" style="width:100%;margin-top:8px;padding:10px;">Login</button>
         <p style="text-align:center;margin-top:12px;font-size:11px;color:var(--text2);">Don't have an account? <a href="#" onclick="showSignupForm();return false;" style="color:var(--accent);">Sign up</a></p>
       </div>
@@ -136,6 +173,7 @@
         <input type="email" id="auth-signup-email" placeholder="you@example.com" autocomplete="email">
         <label>Password</label>
         <input type="password" id="auth-signup-password" placeholder="Password (min 8 chars)" autocomplete="new-password">
+        <label class="remember-row"><input type="checkbox" id="auth-signup-remember" checked><span>Remember me</span></label>
         <button class="btn primary" onclick="doSignupEmail()" style="width:100%;margin-top:8px;padding:10px;">Create Account</button>
         <p style="text-align:center;margin-top:12px;font-size:11px;color:var(--text2);">Already have an account? <a href="#" onclick="showLoginForm();return false;" style="color:var(--accent);">Login</a></p>
       </div>
@@ -153,12 +191,12 @@
 <!-- Appwrite SDK from CDN (must load before cloud.js) -->
 <script src="https://cdn.jsdelivr.net/npm/appwrite@23.0.0/dist/iife/sdk.min.js"></script>
 <!-- JS files loaded individually -->
-<script src="js/config.js?v=3"></script>
-<script src="js/crypto.js?v=3"></script>
-<script src="js/icons.js?v=3"></script>
-<script src="js/cloud.js?v=3"></script>
-<script src="js/contextmenu.js?v=3"></script>
-<script src="js/app.js?v=3"></script>
+<script src="js/config.js?v=5"></script>
+<script src="js/crypto.js?v=5"></script>
+<script src="js/icons.js?v=5"></script>
+<script src="js/cloud.js?v=5"></script>
+<script src="js/contextmenu.js?v=5"></script>
+<script src="js/app.js?v=5"></script>
 <script>initApp();</script>
 </body>
 </html>

@@ -16,8 +16,29 @@
  */
 let _acct=null,_db=null,_sto=null,_user=null,_discordProfile=null;
 const _JWT_KEY="ykw_jwt";
+const _SESSION_KEY="ykw_session";  // stores {userId, secret} for session restore
+const _EMAIL_KEY="ykw_email";      // stores email for pre-fill
+const _REMEMBER_KEY="ykw_remember"; // flag: user wants to be remembered
 
 function _log(...args){console.log("[auth]",...args);}
+
+// ── Session storage for "Remember Me" ───────────────────────
+function _storeSession(session,remember,email){
+  if(remember&&session&&session.$id&&session.secret){
+    localStorage.setItem(_SESSION_KEY,JSON.stringify({userId:session.userId||_user?.$id,secret:session.secret}));
+    localStorage.setItem(_REMEMBER_KEY,"1");
+  }
+  if(email)localStorage.setItem(_EMAIL_KEY,email);
+}
+function _storedSession(){
+  try{return JSON.parse(localStorage.getItem(_SESSION_KEY));}catch(_){return null;}
+}
+function _clearSession(){
+  localStorage.removeItem(_SESSION_KEY);
+  localStorage.removeItem(_REMEMBER_KEY);
+  localStorage.removeItem(_EMAIL_KEY);
+}
+function _storedEmail(){return localStorage.getItem(_EMAIL_KEY)||"";}
 
 function _makeClient(token){
   const{Client,Databases,Storage}=Appwrite;
@@ -62,11 +83,15 @@ function _checkOAuthToken(){
 async function _createSessionFromToken(userId,secret){
   try{
     _log("Creating session from token...");
+    // Delete any existing sessions first (fixes "session is prohibited when active")
+    try{await _acct.deleteSessions();}catch(_){}
     const session=await _acct.createSession({userId,secret});
     _log("Session created:",session.$id);
     // Get the user
     _user=await _acct.get();
     _log("User:",_user.name||_user.email);
+    // Discord logins always remember — store session for restoration
+    _storeSession(session,true,_user.email);
     // Promote to JWT
     await _promoteToJwt();
     return _user;
@@ -79,13 +104,13 @@ async function _createSessionFromToken(userId,secret){
 // ── JWT promotion ────────────────────────────────────────────
 async function _promoteToJwt(){
   try{
-    const res=await _acct.createJWT();
+    const res=await _acct.createJWT({duration:3600});  // Max 1 hour
     if(res&&res.jwt){
       localStorage.setItem(_JWT_KEY,res.jwt);
       localStorage.removeItem("cookieFallback");  // Clear cookie fallback to avoid JWT+cookie conflict
       const c=_makeClient(res.jwt);
       _acct=new Appwrite.Account(c);
-      _log("Promoted to JWT ✓");
+      _log("Promoted to JWT ✓ (1h duration)");
     }
   }catch(e){
     _log("JWT promotion failed:",e.message);
@@ -111,8 +136,24 @@ async function checkAuth(){
     }catch(_){
       localStorage.removeItem(_JWT_KEY);
       _user=null;
+    }
+  }
+
+  // 3. Try restoring from stored session secret ("Remember Me")
+  const stored=_storedSession();
+  if(stored&&stored.userId&&stored.secret){
+    try{
+      _log("Restoring session from stored secret...");
       const c=_makeClient(null);
       _acct=new Appwrite.Account(c);
+      const session=await _acct.createSession({userId:stored.userId,secret:stored.secret});
+      _user=await _acct.get();
+      _log("Session restored:",_user.name||_user.email);
+      await _promoteToJwt();
+      return _user;
+    }catch(e){
+      _log("Session restore failed:",e.message);
+      _clearSession();
     }
   }
 
@@ -120,23 +161,25 @@ async function checkAuth(){
 }
 
 // ── Email/Password Auth ──────────────────────────────────────
-async function signupEmail(name,email,password){
+async function signupEmail(name,email,password,remember){
   const{ID}=Appwrite;
   _log("Signing up:",email);
   await _acct.create(ID.unique(),email,password,name||email.split("@")[0]);
-  await _acct.createEmailPasswordSession(email,password);
+  const session=await _acct.createEmailPasswordSession(email,password);
   _user=await _acct.get();
+  _storeSession(session,remember,email);
   await _promoteToJwt();
-  _log("Signup OK:",_user.email);
+  _log("Signup OK:",_user.email,remember?"(remembered)":"");
   return _user;
 }
 
-async function loginEmail(email,password){
+async function loginEmail(email,password,remember){
   _log("Logging in:",email);
-  await _acct.createEmailPasswordSession(email,password);
+  const session=await _acct.createEmailPasswordSession(email,password);
   _user=await _acct.get();
+  _storeSession(session,remember,email);
   await _promoteToJwt();
-  _log("Login OK:",_user.email);
+  _log("Login OK:",_user.email,remember?"(remembered)":"");
   return _user;
 }
 
@@ -161,6 +204,7 @@ async function logout(){
   localStorage.removeItem(_JWT_KEY);
   localStorage.removeItem(_PROFILE_KEY);
   localStorage.removeItem("cookieFallback");
+  _clearSession();  // Clear remember-me data
   const c=_makeClient(null);
   _acct=new Appwrite.Account(c);
   _log("Logged out");

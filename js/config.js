@@ -3,7 +3,7 @@
  *
  * Setup: See ykw-web/README.md
  */
-const APP_VERSION = "2.1.0";  // Bump this when deploying updates — forces browser to re-fetch JS files
+const APP_VERSION = "2.3.0";  // Bump this when deploying updates — forces browser to re-fetch JS files
 console.log("[config] YKW Home v" + APP_VERSION + " loaded");
 
 const APPWRITE_ENDPOINT = "https://tor.cloud.appwrite.io/v1";

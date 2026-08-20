@@ -35,6 +35,12 @@ function showAuthModal(){
   document.getElementById("auth-modal").style.display="flex";
   document.getElementById("auth-error").style.display="none";
   showLoginForm();
+  // Pre-fill email from stored remember-me data
+  const stored=_storedEmail();
+  if(stored){
+    const emailEl=document.getElementById("auth-email");
+    if(emailEl)emailEl.value=stored;
+  }
 }
 function closeAuthModal(){
   document.getElementById("auth-modal").style.display="none";
@@ -75,9 +81,10 @@ async function doImportSession(){
 async function doLoginEmail(){
   const email=document.getElementById("auth-email").value.trim();
   const pass=document.getElementById("auth-password").value;
+  const remember=document.getElementById("auth-remember").checked;
   if(!email||!pass){showAuthError("Enter email and password.");return;}
   try{
-    const user=await loginEmail(email,pass);
+    const user=await loginEmail(email,pass,remember);
     updateAuthUI(user);
     closeAuthModal();
   }catch(e){
@@ -88,10 +95,11 @@ async function doSignupEmail(){
   const name=document.getElementById("auth-name").value.trim();
   const email=document.getElementById("auth-signup-email").value.trim();
   const pass=document.getElementById("auth-signup-password").value;
+  const remember=document.getElementById("auth-signup-remember").checked;
   if(!email||!pass){showAuthError("Enter email and password.");return;}
   if(pass.length<8){showAuthError("Password must be at least 8 characters.");return;}
   try{
-    const user=await signupEmail(name,email,pass);
+    const user=await signupEmail(name,email,pass,remember);
     updateAuthUI(user);
     closeAuthModal();
   }catch(e){
@@ -102,21 +110,31 @@ async function doSignupEmail(){
 function updateAuthUI(user){
   const btn=document.getElementById("auth-btn");
   const userEl=document.getElementById("user-info");
+  const mBtn=document.getElementById("mobile-auth-btn");
+  const mUserEl=document.getElementById("mobile-user-info");
+  // Try Discord profile first, then fall back to Appwrite user
+  const d=_discordProfile||{};
+  const uname=d.global_name||d.username||user?.name||user?.email||"User";
+  const avatar=discordAvatarUrl(d);
+  const avatarHtml=avatar
+    ?`<img class="user-avatar" src="${avatar}" alt="" onerror="this.style.display='none'">`
+    :`<div class="user-avatar placeholder-avatar" style="background:${nameColor(uname)};width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;color:#fff;">${(uname||"?")[0].toUpperCase()}</div>`;
   if(user){
     btn.style.display="none";
     userEl.style.display="inline-flex";
-    // Try Discord profile first, then fall back to Appwrite user
-    const d=_discordProfile||{};
-    const name=d.global_name||d.username||user.name||user.email||"User";
-    const avatar=discordAvatarUrl(d);
-    // If no Discord avatar, generate a colored initial circle
-    const avatarHtml=avatar
-      ?`<img class="user-avatar" src="${avatar}" alt="" onerror="this.style.display='none'">`
-      :`<div class="user-avatar placeholder-avatar" style="background:${nameColor(name)};width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;color:#fff;">${(name||"?")[0].toUpperCase()}</div>`;
     userEl.innerHTML=`
       ${avatarHtml}
-      <span class="user-name">${name.replace(/</g,"&lt;")}</span>
+      <span class="user-name">${uname.replace(/</g,"&lt;")}</span>
       <button class="btn small" onclick="doLogout()">Logout</button>`;
+    // Mobile: show avatar, hide sign-in button
+    if(mBtn)mBtn.style.display="none";
+    if(mUserEl){
+      mUserEl.style.display="inline-flex";
+      mUserEl.innerHTML=`
+        ${avatarHtml}
+        <span class="user-name">${uname.replace(/</g,"&lt;")}</span>
+        <button class="btn small" onclick="doLogout()">Logout</button>`;
+    }
     // Enable cloud buttons
     document.querySelectorAll("[data-requires-auth]").forEach(b=>b.disabled=false);
   }else{
@@ -124,6 +142,8 @@ function updateAuthUI(user){
     btn.textContent="Sign In";
     btn.onclick=()=>showAuthModal();
     userEl.style.display="none";
+    if(mBtn){mBtn.style.display="";mBtn.onclick=()=>showAuthModal();}
+    if(mUserEl)mUserEl.style.display="none";
     // Disable cloud buttons
     document.querySelectorAll("[data-requires-auth]").forEach(b=>b.disabled=true);
   }
@@ -317,7 +337,9 @@ function closeDetail(){document.getElementById("detail-modal").style.display="no
 
 // ── Cloud boxes ───────────────────────────────────────────────
 async function loadCloudView(){
-  if(!await checkAuth()){alert("Login with Discord first!");return;}
+  if(!_user){
+    try{const u=await checkAuth();if(!u){alert("Please sign in first.");return;}}catch(_){alert("Please sign in first.");return;}
+  }
   _cloudBoxes=await loadCloudBoxes();
   _cloudBoxIdx=0;_viewMode="cloud";
   renderCloudBoxes();showView("cloud");
@@ -364,7 +386,7 @@ async function saveToCloud(){
 // ── Upload save file to cloud storage ─────────────────────────
 async function uploadSaveToCloud(){
   if(!await checkAuth()){alert("Login with Discord first!");return;}
-  const inp=document.createElement("input");inp.type="file";inp.accept=".yw,.yw_g,.bin";
+  const inp=document.createElement("input");inp.type="file";inp.accept=".yw,.yw_g,.bin,.yk1,.yk2,.yk3,.ykb,.ykb2,.yk";
   inp.onchange=async e=>{
     const file=e.target.files[0];if(!file)return;
     try{await uploadSaveFile(file);alert("Save file uploaded!");renderSaveFileList();}
@@ -388,6 +410,7 @@ function showView(v){
   document.querySelectorAll(".page").forEach(p=>p.style.display="none");
   document.getElementById(v+"-page").style.display="flex";
   document.querySelectorAll(".nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
+  document.querySelectorAll(".mobile-nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
 }
 function navigate(v){showView(v);if(v==="cloud")loadCloudView();if(v==="settings")renderSettings();}
 
