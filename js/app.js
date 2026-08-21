@@ -324,11 +324,20 @@ function renderGrid(){
     if(y){
       cell.classList.add("filled");
       if(y.is_team)cell.classList.add("team");
-      const url=getYokaiIconUrl(y.yokai_id,_currentGame);
+      const url=y.iconUrl||getYokaiIconUrl(y.yokai_id,y.game||_currentGame);
       if(url){
-        const img=document.createElement("img");img.src=url;img.alt=y.name||"";
-        img.onerror=function(){this.remove();addPlaceholder(cell,y);};
-        cell.appendChild(img);
+        // Use canvas for animated sprites (YW4), img for static (other games)
+        if(y.game==="yw4"&&typeof startSpriteAnimation==="function"){
+          const cvs=document.createElement("canvas");
+          cvs.style.imageRendering="pixelated";
+          cvs.className="yokai-icon";
+          cell.appendChild(cvs);
+          startSpriteAnimation(cvs,url,2);
+        }else{
+          const img=document.createElement("img");img.src=url;img.alt=y.name||"";
+          img.onerror=function(){this.remove();addPlaceholder(cell,y);};
+          cell.appendChild(img);
+        }
       }else{addPlaceholder(cell,y);}
       const lv=document.createElement("div");lv.className="lv"+(y.level===99?" gold":"");
       lv.textContent="Lv."+y.level;cell.appendChild(lv);
@@ -365,19 +374,44 @@ function nextBox(){_boxIdx++;_selSlot=null;renderGrid();}
 function showDetailModal(y,boxNum){
   const m=document.getElementById("detail-modal");
   const c=document.getElementById("detail-content");
-  const url=getYokaiIconUrl(y.yokai_id,y.game);
+  const url=y.iconUrl||getYokaiIconUrl(y.yokai_id,y.game);
   const hex=Array.from(y.raw.slice(0,64)).map(b=>b.toString(16).padStart(2,"0")).join(" ");
   const ext=YK_EXT[y.game]||".yk";
+  // Get stat offsets based on game
+  const gi=GAMES[y.game];
+  const dv=new DataView(y.raw.buffer,y.raw.byteOffset,y.raw.byteLength);
+  const isFlat=y.game==="yw4";
+  // Build stat display with editable fields
+  const levelOff=isFlat?180:(gi?gi.lvOff:0x4F);
+  const currentLevel=dv.getInt32?dv.getInt32(levelOff,true):y.raw[levelOff];
+  const isYW4=y.game==="yw4"&&typeof startSpriteAnimation==="function";
+  const iconHtml=isYW4&&url?`<canvas class="detail-icon-canvas" width="144" height="110" style="image-rendering:pixelated;"></canvas>`:(url?`<img src="${url}" onerror="this.outerHTML='<div class=\\'placeholder large\\' style=\\'background:${nameColor(y.name)}\\'>${(y.name||"?").slice(0,2).toUpperCase()}</div>'">`:`<div class="placeholder large" style="background:${nameColor(y.name)}">${(y.name||"?").slice(0,2).toUpperCase()}</div>`);
   c.innerHTML=`
-    <div class="detail-icon">${url?`<img src="${url}" onerror="this.outerHTML='<div class=\\'placeholder large\\' style=\\'background:${nameColor(y.name)}\\'>${(y.name||"?").slice(0,2).toUpperCase()}</div>'">`:`<div class="placeholder large" style="background:${nameColor(y.name)}">${(y.name||"?").slice(0,2).toUpperCase()}</div>`}</div>
+    <div class="detail-icon">${iconHtml}</div>
     <h2>${y.name||resolveName(y.yokai_id)}</h2>
-    <div class="badge" style="color:${y.level===99?"var(--yellow)":"var(--accent)"}">Level ${y.level}</div>
+    <div class="badge" style="color:${y.level===99?"var(--yellow)":"var(--accent)"}>Level ${y.level}</div>
     <div class="badge team">${y.is_team?"★ PARTY MEMBER":""}</div>
     <div class="info-card">
       <div class="info-row"><span class="k">ID</span><span class="v">0x${y.yokai_id.toString(16).toUpperCase().padStart(8,"0")}</span></div>
       <div class="info-row"><span class="k">Slot</span><span class="v">${y.slot} (box ${boxNum+1})</span></div>
       <div class="info-row"><span class="k">Game</span><span class="v">${y.game.toUpperCase()}</span></div>
       <div class="info-row"><span class="k">Entry</span><span class="v">${y.raw.length} bytes</span></div>
+    </div>
+    <div class="info-card">
+      <h3>✏️ Edit Stats</h3>
+      <div class="edit-row"><label>Level</label><input type="number" id="edit-level" min="1" max="99" value="${y.level}" class="edit-input"/></div>
+      ${isFlat?`
+        <div class="edit-row"><label>HP+</label><input type="number" id="edit-hpp" min="0" max="65535" value="${dv.getUint16(214,true)}" class="edit-input"/></div>
+        <div class="edit-row"><label>YP+</label><input type="number" id="edit-ypp" min="0" max="65535" value="${dv.getUint16(216,true)}" class="edit-input"/></div>
+        <div class="edit-row"><label>ST+</label><input type="number" id="edit-stp" min="0" max="65535" value="${dv.getUint16(218,true)}" class="edit-input"/></div>
+        <div class="edit-row"><label>SP+</label><input type="number" id="edit-spp" min="0" max="65535" value="${dv.getUint16(220,true)}" class="edit-input"/></div>
+        <div class="edit-row"><label>PA+</label><input type="number" id="edit-pap" min="0" max="65535" value="${dv.getUint16(222,true)}" class="edit-input"/></div>
+        <div class="edit-row"><label>SA+</label><input type="number" id="edit-sap" min="0" max="65535" value="${dv.getUint16(224,true)}" class="edit-input"/></div>
+      `:`
+        <div class="edit-row"><label>HP+</label><input type="number" id="edit-hpp" min="0" max="65535" value="${y.raw[gi.lvOff+7]!==undefined?y.raw[gi.lvOff+7]:0}" class="edit-input"/></div>
+        <div class="edit-row"><label>PA+</label><input type="number" id="edit-pap" min="0" max="65535" value="${y.raw[gi.lvOff+8]!==undefined?y.raw[gi.lvOff+8]:0}" class="edit-input"/></div>
+      `}
+      <button class="btn primary" onclick="applyEdit()" style="margin-top:8px;width:100%">💾 Apply Changes</button>
     </div>
     <div class="info-card"><h3>Raw (hex)</h3><div class="hex">${hex}${y.raw.length>64?"…":""}</div></div>
     <div class="detail-actions">
@@ -386,7 +420,39 @@ function showDetailModal(y,boxNum){
     </div>
     <button class="btn close-btn" onclick="closeDetail()">Close</button>`;
   _currentSaveYokai=y;
+  _currentSaveBoxNum=boxNum;
   m.style.display="flex";
+  // Animate detail icon if it's a sprite sheet
+  if(isYW4&&url&&typeof startSpriteAnimation==="function"){
+    const cvs=c.querySelector(".detail-icon-canvas");
+    if(cvs)startSpriteAnimation(cvs,url,2);
+  }
+}
+let _currentSaveBoxNum=0;
+function applyEdit(){
+  if(!_currentSaveYokai)return;
+  const y=_currentSaveYokai;
+  const gi=GAMES[y.game];
+  const isFlat=y.game==="yw4";
+  const dv=new DataView(y.raw.buffer,y.raw.byteOffset,y.raw.byteLength);
+  // Apply level
+  const lvEl=document.getElementById("edit-level");
+  if(lvEl){const lv=parseInt(lvEl.value)||1;const cl=Math.max(1,Math.min(99,lv));
+    if(isFlat)dv.setInt32(180,cl,true);else y.raw[gi?gi.lvOff:0x4F]=cl;
+    y.level=cl;
+  }
+  // Apply stat bonuses (YW4 flat format)
+  if(isFlat){
+    const fields=["edit-hpp:214","edit-ypp:216","edit-stp:218","edit-spp:220","edit-pap:222","edit-sap:224"];
+    for(const f of fields){const[id,off]=f.split(":");const el=document.getElementById(id);if(el){dv.setUint16(parseInt(off),parseInt(el.value)||0,true);}}
+  }else if(gi){
+    const hpp=document.getElementById("edit-hpp");const pap=document.getElementById("edit-pap");
+    if(hpp&&gi.lvOff+7<y.raw.length)y.raw[gi.lvOff+7]=parseInt(hpp.value)||0;
+    if(pap&&gi.lvOff+8<y.raw.length)y.raw[gi.lvOff+8]=parseInt(pap.value)||0;
+  }
+  // Re-render
+  renderGrid();
+  alert("Changes applied! Export the save to use in-game.");
 }
 let _currentSaveYokai=null;
 function closeDetail(){document.getElementById("detail-modal").style.display="none";}

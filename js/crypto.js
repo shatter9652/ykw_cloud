@@ -234,7 +234,8 @@ function extractYokaiYW4(dec){
     if(!id2)continue;
     const sig=formatSig(dec,off+72);
     const name=YW4_SIG_MAP[sig]||"Unknown";
-    entries.push({slot:i,yokai_id:id1,level:dv.getInt32(off+180,true),is_team:true,raw:new Uint8Array(dec.buffer,dec.byteOffset+off,entrySize),game:"yw4",name,sig});
+    const iconUrl=getYokaiIconUrlBySig?getYokaiIconUrlBySig(sig):null;
+    entries.push({slot:i,yokai_id:id1,level:dv.getInt32(off+180,true),is_team:true,raw:new Uint8Array(dec.buffer,dec.byteOffset+off,entrySize),game:"yw4",name,sig,iconUrl});
   }
   // User yokai (400 entries × 469 bytes at offset 169449)
   const yokaiOff=169449;
@@ -244,7 +245,8 @@ function extractYokaiYW4(dec){
     if(!id2)continue;
     const sig=formatSig(dec,off+72);
     const name=YW4_SIG_MAP[sig]||"Unknown";
-    entries.push({slot:6+i,yokai_id:id1,level:dv.getInt32(off+180,true),is_team:false,raw:new Uint8Array(dec.buffer,dec.byteOffset+off,entrySize),game:"yw4",name,sig});
+    const iconUrl=getYokaiIconUrlBySig?getYokaiIconUrlBySig(sig):null;
+    entries.push({slot:6+i,yokai_id:id1,level:dv.getInt32(off+180,true),is_team:false,raw:new Uint8Array(dec.buffer,dec.byteOffset+off,entrySize),game:"yw4",name,sig,iconUrl});
   }
   return entries;
 }
@@ -255,6 +257,7 @@ function formatSig(buf,off){return `${buf[off].toString(16).padStart(2,"0")}-${b
 // This allows users to modify yokai data and export a valid save file.
 async function encryptSave(result, game){
   const{data,aesKey,seed,nonce}=result;
+  if(game==="yw4")return data; // YW4 is plaintext, no encryption needed
   if(game==="yw1"){
     return ywEncrypt(data,seed);
   }

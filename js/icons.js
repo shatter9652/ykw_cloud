@@ -27,9 +27,28 @@ function resolveIconBase(id){
   return null;
 }
 function getYokaiIconUrl(id,prefGame){
+  // YW4 uses name-based lookup via signatures
+  if(prefGame==="yw4")return getYokaiIconUrlYW4(id);
   const base=resolveIconBase(id);if(!base)return null;
   const fn=base+".00.png";const order=[prefGame,...ICON_FALLBACK.filter(g=>g!==prefGame)];
   for(const g of order){const d=ICON_DIRS[g];if(d)return`YoKaiIcons/${d}/${fn}`;}return null;
+}
+// YW4 icon lookup: name → filename in YKW4/named/
+function getYokaiIconUrlYW4(nameOrId){
+  // If called with a name string (from extractYokaiYW4)
+  if(typeof nameOrId==="string"&&nameOrId.length>0){
+    // Convert name to filename: "Jibanyan" → "Jibanyan.png", "Komasan (Lightside)" → "Komasan_Lightside_.png"
+    const fn=nameOrId.replace(/\s+/g,"_").replace(/\(/g,"_").replace(/\)/g,"_").replace(/[^a-zA-Z0-9_.-]/g,"")+".png";
+    return`YoKaiIcons/YKW4/named/${fn}`;
+  }
+  // If called with a numeric ID, try to look up via YW4_SIG_MAP
+  return null;
+}
+// Get YW4 icon by signature (called from extractYokaiYW4)
+function getYokaiIconUrlBySig(sig){
+  const name=YW4_SIG_MAP[sig];
+  if(!name)return null;
+  return getYokaiIconUrlYW4(name);
 }
 function getGameIconUrl(game){return GAME_VERSIONS.find(v=>v.id===game)?.icon||"icons/ykw2psycicspecters.png";}
 

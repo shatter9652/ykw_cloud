@@ -98,10 +98,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .modal h2{text-align:center;font-size:18px;margin-bottom:8px;}
 .detail-icon{text-align:center;margin-bottom:12px;}
 .detail-icon img{width:100px;height:100px;image-rendering:pixelated;}
+.detail-icon-canvas{width:100px;height:auto;image-rendering:pixelated;}
+yokai-icon,canvas.yokai-icon{image-rendering:pixelated;}
 .badge{text-align:center;font-size:11px;font-weight:bold;margin:4px 0;}
 .badge.team{color:var(--team);}
 .info-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px;margin:10px 0;}
 .info-card h3{font-size:11px;color:var(--yellow);margin-bottom:6px;}
+.edit-row{display:flex;align-items:center;justify-content:space-between;margin:4px 0;}
+.edit-row label{font-size:11px;color:var(--text2);min-width:50px;}
+.edit-input{width:80px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-family:monospace;text-align:right;}
+.edit-input:focus{border-color:var(--accent);outline:none;}
 .info-row{display:flex;justify-content:space-between;font-size:11px;padding:3px 0;}
 .info-row .k{color:var(--text2);}
 .info-row .v{color:var(--text);font-family:monospace;}

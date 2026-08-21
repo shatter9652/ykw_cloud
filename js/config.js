@@ -3,7 +3,7 @@
  *
  * Setup: See ykw-web/README.md
  */
-const APP_VERSION = "3.3.0";  // Fixed YW4 magic byte order, added YW4 signature map
+const APP_VERSION = "3.6.0";  // YW4 animated sprites, 289 icons, stat editing
 console.log("[config] YKW Home v" + APP_VERSION + " loaded");
 
 const APPWRITE_ENDPOINT = "https://tor.cloud.appwrite.io/v1";
@@ -44,9 +44,15 @@ const GAME_VERSIONS = [
     { id:"yw4", label:"Yo-kai Watch 4",                          icon:"icons/ykw4.png" },
 ];
 
-const ICON_DIRS = { yw2:"YKW2/pngs", yw3:"YKW3/pngs", ykb:"YKWB/base_png", b2:"B2/base_pngs" };
+const ICON_DIRS = { yw2:"YKW2/pngs", yw3:"YKW3/pngs", ykb:"YKWB/base_png", b2:"B2/base_pngs", yw4:"YKW4/named" };
 const ICON_FALLBACK = ["yw3","yw2","ykb","b2"];
-const YK_EXT = { yw1:".yk1", yw2:".yk2", yw3:".yk3", ykb:".ykb", b2:".ykb2" };
+// YW4 name-to-icon lookup (maps yokai name to filename in YKW4/named/)
+const YW4_NAME_ICON = {};
+(function(){
+  // Build from YW4_SIG_MAP: signature -> name, then we'll map name -> icon filename
+  // The named PNGs use underscores: 'Jibanyan.png', 'Komasan.png', etc.
+})();
+const YK_EXT = { yw1:".yk1", yw2:".yk2", yw3:".yk3", ykb:".ykb", b2:".ykb2", yw4:".bin" };
 
 // YW4 flat binary offsets (from AYw4SaveEditor)
 const YW4_OFFSETS = {
