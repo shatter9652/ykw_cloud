@@ -3,7 +3,7 @@
  *
  * Setup: See ykw-web/README.md
  */
-const APP_VERSION = "3.6.0";  // YW4 animated sprites, 289 icons, stat editing
+const APP_VERSION = "3.8.1";  // YW4 animated sprites, 289 icons, stat editing
 console.log("[config] YKW Home v" + APP_VERSION + " loaded");
 
 const APPWRITE_ENDPOINT = "https://tor.cloud.appwrite.io/v1";
@@ -52,7 +52,11 @@ const YW4_NAME_ICON = {};
   // Build from YW4_SIG_MAP: signature -> name, then we'll map name -> icon filename
   // The named PNGs use underscores: 'Jibanyan.png', 'Komasan.png', etc.
 })();
-const YK_EXT = { yw1:".yk1", yw2:".yk2", yw3:".yk3", ykb:".ykb", b2:".ykb2", yw4:".bin" };
+// PKHeX-style extensions: raw yokai bytes, named by species
+// .ykN = raw entry bytes from section 0x07 (YW1-3)
+// .yk4 = raw 469-byte entry from YW4 flat binary
+// .ykwb = Blasters 1 raw entry
+const YK_EXT = { yw1:".yk1", yw2:".yk2", yw3:".yk3", ykb:".ykwb", b2:".ykwb2", yw4:".yk4" };
 
 // YW4 flat binary offsets (from AYw4SaveEditor)
 const YW4_OFFSETS = {

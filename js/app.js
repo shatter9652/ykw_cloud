@@ -222,20 +222,11 @@ async function loadSaveIntoView(g,headData){
 
 function _validateFile(f){
   const MAX_SIZE=5*1024*1024; // 5MB
-  const name=(f.name||"").toLowerCase();
-  const ext=name.split(".").pop();
-  const validSaveExt=["yw","yw_g","bin","yw4"];
-  const validHeadPrefix=name.startsWith("head");
-  const isSave=validSaveExt.includes(ext);
-  const isHead=validHeadPrefix;
-  if(!isSave&&!isHead){
-    alert(`"${f.name}" is not a supported file type.\n\nAccepted: .yw, .yw_g, .bin, .yw4\n(head.yw / head.yw_g for iOS, data.bin for YW4)`);
-    return false;
-  }
   if(f.size>MAX_SIZE){
     alert(`"${f.name}" is too large (${(f.size/1024/1024).toFixed(1)}MB). Max 5MB.`);
     return false;
   }
+  // Accept any file — detection happens in loadSaveIntoView via magic bytes
   return true;
 }
 
@@ -508,11 +499,17 @@ async function saveToCloud(){
 // ── Upload save file to cloud storage ─────────────────────────
 async function uploadSaveToCloud(){
   if(!await checkAuth()){alert("Login with Discord first!");return;}
-  const inp=document.createElement("input");inp.type="file";inp.accept="*/*";
+  const inp=document.createElement("input");inp.type="file";inp.accept="*/*";inp.multiple=true;
   inp.onchange=async e=>{
-    const file=e.target.files[0];if(!file)return;
-    try{await uploadSaveFile(file);alert("Save file uploaded!");renderSaveFileList();}
-    catch(err){alert("Upload failed: "+err.message);}
+    const files=Array.from(e.target.files);
+    if(!files.length)return;
+    let uploaded=0,failed=0;
+    for(const file of files){
+      try{await uploadSaveFile(file);uploaded++;}
+      catch(err){failed++;console.error("Upload failed:",file.name,err);}
+    }
+    alert(`Uploaded ${uploaded}/${files.length} files${failed?` (${failed} failed)`:''}`);
+    renderSaveFileList();
   };
   inp.click();
 }
@@ -568,7 +565,8 @@ function quickImportYokai(){
   importYkFile(_boxIdx,slot);
 }
 
-// ── Export full save file (re-encrypted) ─────────────────────
+// ── Export full save file (re-encrypted) ─────────────────────// Save file export: .yw for YW1/2/3/Blasters, .bin for YW4
+const SAVE_EXPORT_EXT={yw1:".yw",yw2:".yw",yw3:".yw",ykb:".yw",b2:".yw",yw4:".bin"};
 async function exportSaveFile(){
   const save=_saves[_currentGame];
   if(!save){alert("Open a save first.");return;}
@@ -578,10 +576,9 @@ async function exportSaveFile(){
     const a=document.createElement("a");
     a.href=URL.createObjectURL(blob);
     const baseName=(save.file||"save").replace(/\.[^.]+$/,"");
-    const ext=YK_EXT[_currentGame]||".bin";
+    const ext=SAVE_EXPORT_EXT[_currentGame]||".bin";
     a.download=baseName+ext;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    a.click();URL.revokeObjectURL(a.href);
   }catch(e){
     alert("Export failed: "+e.message);
   }
@@ -594,7 +591,7 @@ function setupGridDrop(){
   grid.addEventListener("drop",e=>{
     e.preventDefault();
     const file=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
-    if(!file||!/\.(yk1|yk2|yk3|ykb|ykb2|yk|bin)$/i.test(file.name))return;
+    if(!file||!/\.(yk1|yk2|yk3|yk4|ykwb|ykwb2|yk|yw|yw_g|bin)$/i.test(file.name))return;
     const save=_saves[_currentGame];
     if(!save)return;
     const rect=grid.getBoundingClientRect();
