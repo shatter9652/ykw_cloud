@@ -39,7 +39,7 @@ function detectGameVersion(filename,header){
   for(const v of GAME_VERSIONS)if(v.match&&v.match.test(hint))return v;
   // Check YW4 magic FIRST (0xEEFF = bytes 0xFF, 0xEE) — before CCM check
   // because YW4 files also have non-zero first bytes
-  if(header&&header.length>=2&&header[0]===0xFF&&header[1]===0xEE)return GAME_VERSIONS.find(v=>v.id==="yw4");
+  if(header&&header.length>=2&&header[0]===0xEE&&header[1]===0xFF)return GAME_VERSIONS.find(v=>v.id==="yw4");
   if(header&&header.length>=12){
     let hasCCM=false;for(let i=0;i<12;i++)if(header[i]!==0){hasCCM=true;break;}
     if(hasCCM){

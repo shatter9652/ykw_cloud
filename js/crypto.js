@@ -224,7 +224,7 @@ function extractYokai(dec,game){
 function extractYokaiYW4(dec){
   const dv=new DataView(dec.buffer,dec.byteOffset,dec.byteLength);
   // Check magic 0xEEFF
-  if(dv.getUint16(0,true)!==0xEEFF)throw new Error("Not a YW4 save (missing 0xEEFF magic)");
+  if(dv.getUint16(0,true)!==0xFFEE)throw new Error("Not a YW4 save (missing 0xFFEE magic)");
   const entries=[];
   // Party (6 entries × 469 bytes at offset 166627)
   const partyOff=166627,entrySize=469;
